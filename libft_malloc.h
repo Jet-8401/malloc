@@ -2,7 +2,6 @@
 # define LIBFT_MALLOC_H
 
 # include <stddef.h>
-// # include <stdlib.h>
 # include <stdalign.h>
 
 # define TINY_ZONE_TRESHOLD 128
@@ -27,11 +26,12 @@ typedef struct freed_block_list_s {
 typedef struct zone_metadata_s {
 	struct zone_metadata_s *next;
 	freed_block_list_t *begin;
+	// freed_block_list_t *last;
 }	zone_metadata_t;
 
-const size_t ALIGNED_METADATA_SIZE =
-    (sizeof(zone_metadata_t) + alignof(max_align_t) - 1) &
-    ~(alignof(max_align_t) - 1);
+# define ALIGN_SIZE(size) (size + alignof(max_align_t) - 1) & ~(alignof(max_align_t) - 1);
+
+const size_t ALIGNED_METADATA_SIZE = ALIGN_SIZE(sizeof(zone_metadata_t));
 
 /* global allocator structure */
 

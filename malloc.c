@@ -5,7 +5,7 @@
 #include <string.h>
 #include <stdalign.h>
 
-int allocate_zone(
+static int allocate_zone(
     zone_metadata_t **zone,
     size_t size,
     const enum ZONE_TYPE type
@@ -15,7 +15,7 @@ int allocate_zone(
             size = TINY_ZONE_ALLOC;
             break;
         case SMALL:
-            size = SMALL_ZONE_TRESHOLD;
+            size = SMALL_ZONE_ALLOC;
             break;
         default:
             break;
@@ -27,62 +27,55 @@ int allocate_zone(
     if (*zone == MAP_FAILED)
         return -1;
 
-    // create metadata
-    // zone_metadata_t zone_metadata = {
-    //     .next = 0,
-    //     .begin = (freed_block_list_t*)(((void*) *zone) + ALIGNED_METADATA_SIZE)
-    // };
     const size_t ps = sysconf(_SC_PAGESIZE);
     // Instead of just puting the argument `size` inside the list metadata
     // we calculate the size based on the page size because mmap will return
     // an address aligned to it therefore, it might allocate a lot more than
     // what was requested.
     // That way we account for the full allocated size.
-    // freed_block_list_t block_metadata = {
-    //     .next = 0,
-    //     .size = (((size + ps - 1) / ps) * ps) - ALIGNED_METADATA_SIZE
-    // };
-
-    // insert metadata
-    (*zone)->begin = (freed_block_list_t*)(((void*) *zone) + ALIGNED_METADATA_SIZE);
-    (*zone)->begin->size = (((size + ps - 1) / ps) * ps) - ALIGNED_METADATA_SIZE;
-    const size_t size_debug = (*zone)->begin->size;
-    (void) size_debug;
-    // memcpy(*zone, &zone_metadata, sizeof(zone_metadata));
-    // memcpy((*zone)->begin, &block_metadata, sizeof(freed_block_list_t));
+    (*zone)->begin = ((void*) *zone) + ALIGNED_METADATA_SIZE;
+    (*zone)->begin->size = ((size + ps - 1) / ps) * ps - ALIGNED_METADATA_SIZE;
 
     return 0;
 }
 
-void* search_freed_block(zone_metadata_t *zone, const size_t size) {
+// return an address that fit the size parameter or NULL if can't find one
+static void *search_free_block_in_zone(
+    zone_metadata_t *zone,
+    const size_t size
+) {
+    freed_block_list_t *block_it;
+
+    for (block_it = zone->begin; block_it != NULL; block_it = block_it->next) {
+        if (block_it->size < size)
+            continue;
+
+        void *result = block_it;
+        const size_t aligned_size = ALIGN_SIZE(size);
+        const size_t remaining_size = block_it->size - aligned_size;
+
+        if (remaining_size < sizeof(freed_block_list_t)) {
+            zone->begin = block_it->next;
+            continue;
+        }
+
+        freed_block_list_t *next_location = (void*) block_it + aligned_size;
+        next_location->size = remaining_size;
+        next_location->next = block_it->next;
+        zone->begin = next_location;
+        return result;
+    }
+
+    return NULL;
+}
+
+static void* search_freed_block(zone_metadata_t *zone, const size_t size) {
     zone_metadata_t *zone_it = zone;
 
     while (zone_it) {
-        freed_block_list_t *block_it = zone_it->begin;
-
-        while (block_it) {
-            if (block_it->size >= size) {
-                void *result = block_it;
-                const size_t aligned_size = (size + alignof(max_align_t) - 1) & ~(alignof(max_align_t) - 1);
-                const size_t remaining_size = block_it->size - aligned_size;
-
-                if (remaining_size >= sizeof(freed_block_list_t)) {
-                    // Enough space left for a new freed block
-                    freed_block_list_t *next_location = ((void*) block_it) + aligned_size;
-                    next_location->size = remaining_size;
-                    next_location->next = block_it->next;  // Preserve the chain!
-                    zone_it->begin = next_location;
-                } else {
-                    // Not enough space left, consume the entire block
-                    zone_it->begin = block_it->next;
-                }
-
-                return result;
-            }
-
-            block_it = block_it->next;
-        }
-
+        void* result = search_free_block_in_zone(zone_it, size);
+        if (result)
+            return result;
         zone_it = zone_it->next;
     }
 
@@ -105,6 +98,16 @@ void *malloc(size_t size) {
     if (!*zone && allocate_zone(zone, size, zone_type) == -1) {
         return NULL;
     }
+
+    void *block = search_freed_block(*zone, size);
+    if (block)
+        return block;
+
+    zone_metadata_t *zone_it = *zone;
+    while (zone_it->next != NULL)
+        zone_it = zone_it->next;
+    if (allocate_zone(&(zone_it->next), size, zone_type) == -1)
+        return NULL;
 
     return search_freed_block(*zone, size);
 }
