@@ -6,18 +6,18 @@
  */
 
 int main() {
-    int *value = ft_malloc(sizeof(int));
+    int *value = malloc(sizeof(int));
     if (!value)
         return 1;
     *value = 52;
 
-    int *second_value = ft_malloc(sizeof(int));
+    int *second_value = malloc(sizeof(int));
     if (!second_value)
         return 1;
     *second_value = 103;
 
     for (int i = 0; i < 1023; i++) {
-        int *temp_value = ft_malloc(sizeof(int));
+        int *temp_value = malloc(sizeof(int));
         if (!temp_value)
             return 1;
         *temp_value = i;

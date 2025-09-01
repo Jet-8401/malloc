@@ -89,7 +89,7 @@ void* search_freed_block(zone_metadata_t *zone, const size_t size) {
     return NULL;
 }
 
-void *ft_malloc(size_t size) {
+void *malloc(size_t size) {
     // get the zone type based on the size
     zone_metadata_t **zone = &g_allocator.large_zone;
     enum ZONE_TYPE zone_type = LARGE;

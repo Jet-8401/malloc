@@ -46,7 +46,7 @@ typedef struct allocator_s {
 static allocator_t g_allocator = { NULL, NULL, NULL };
 
 void	free(void *ptr);
-void	*ft_malloc(size_t size);
+void	*malloc(size_t size);
 void	*realloc(void *ptr, size_t size);
 
 #endif
