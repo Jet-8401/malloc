@@ -5,6 +5,13 @@
 #include <string.h>
 #include <stdalign.h>
 
+static const size_t TINY_ZONE_ALLOC = TINY_ZONE_TRESHOLD * 100;
+static const size_t SMALL_ZONE_ALLOC = SMALL_ZONE_TRESHOLD * 100;
+static const size_t ALIGNED_ZONE_METADATA = ALIGN_SIZE(sizeof(zone_metadata_t));
+// static const size_t ALIGNED_BLOCK_METADATA =
+//     ALIGN_SIZE(sizeof(block_metadata_t));
+static const size_t ALIGNED_BLOCK_METADATA = 1;
+
 static int allocate_zone(
     zone_metadata_t **zone,
     size_t size,
@@ -21,7 +28,7 @@ static int allocate_zone(
             break;
     }
 
-    size += ALIGNED_METADATA_SIZE;
+    size += ALIGNED_ZONE_METADATA;
     *zone = mmap(NULL, size, PROT_READ | PROT_WRITE,
         MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (*zone == MAP_FAILED)
@@ -33,8 +40,8 @@ static int allocate_zone(
     // an address aligned to it therefore, it might allocate a lot more than
     // what was requested.
     // That way we account for the full allocated size.
-    (*zone)->begin = ((void*) *zone) + ALIGNED_METADATA_SIZE;
-    (*zone)->begin->size = ((size + ps - 1) / ps) * ps - ALIGNED_METADATA_SIZE;
+    (*zone)->begin = ((void*) *zone) + ALIGNED_ZONE_METADATA;
+    (*zone)->begin->size = ((size + ps - 1) / ps) * ps - ALIGNED_ZONE_METADATA;
 
     return 0;
 }
@@ -45,24 +52,36 @@ static void *search_free_block_in_zone(
     const size_t size
 ) {
     freed_block_list_t *block_it;
+    freed_block_list_t *prev_block = NULL;
+    const size_t aligned_size = ALIGN_SIZE(size);
+    const size_t full_size = aligned_size + ALIGNED_BLOCK_METADATA;
 
-    for (block_it = zone->begin; block_it != NULL; block_it = block_it->next) {
-        if (block_it->size < size)
+    for (
+        block_it = zone->begin;
+        block_it != NULL;
+        prev_block = block_it, block_it = block_it->next
+    ) {
+        if (block_it->size < full_size)
             continue;
 
         void *result = block_it;
-        const size_t aligned_size = ALIGN_SIZE(size);
-        const size_t remaining_size = block_it->size - aligned_size;
+        *(size_t*)(result + aligned_size) = size;
+        const size_t remaining_size = block_it->size - full_size;
 
         if (remaining_size < sizeof(freed_block_list_t)) {
             zone->begin = block_it->next;
-            continue;
+            return result;
         }
 
-        freed_block_list_t *next_location = (void*) block_it + aligned_size;
+        freed_block_list_t *next_location = (void*) block_it + full_size;
         next_location->size = remaining_size;
         next_location->next = block_it->next;
-        zone->begin = next_location;
+
+        if (prev_block)
+            prev_block->next = next_location;
+        else
+            zone->begin = next_location;
+
         return result;
     }
 
