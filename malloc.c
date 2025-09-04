@@ -27,7 +27,7 @@ static int allocate_zone(
 
     size += ALIGNED_ZONE_METADATA;
     *zone = mmap(NULL, size, PROT_READ | PROT_WRITE,
-        MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        MAP_ANON | MAP_PRIVATE, -1, 0);
     if (*zone == MAP_FAILED)
         return -1;
 
