@@ -7,10 +7,7 @@
 
 static const size_t TINY_ZONE_ALLOC = TINY_ZONE_TRESHOLD * 100;
 static const size_t SMALL_ZONE_ALLOC = SMALL_ZONE_TRESHOLD * 100;
-static const size_t ALIGNED_ZONE_METADATA = ALIGN_SIZE(sizeof(zone_metadata_t));
-// static const size_t ALIGNED_BLOCK_METADATA =
-//     ALIGN_SIZE(sizeof(block_metadata_t));
-static const size_t ALIGNED_BLOCK_METADATA = 1;
+static const size_t ALIGNED_ZONE_METADATA = ALIGN(sizeof(zone_metadata_t));
 
 static int allocate_zone(
     zone_metadata_t **zone,
@@ -41,7 +38,7 @@ static int allocate_zone(
     // what was requested.
     // That way we account for the full allocated size.
     (*zone)->begin = ((void*) *zone) + ALIGNED_ZONE_METADATA;
-    (*zone)->begin->size = ((size + ps - 1) / ps) * ps - ALIGNED_ZONE_METADATA;
+    (*zone)->begin->payload_size = ((size + ps - 1) / ps) * ps - ALIGNED_ZONE_METADATA;
 
     return 0;
 }
@@ -51,30 +48,29 @@ static void *search_free_block_in_zone(
     zone_metadata_t *zone,
     const size_t size
 ) {
-    freed_block_list_t *block_it;
-    freed_block_list_t *prev_block = NULL;
-    const size_t aligned_size = ALIGN_SIZE(size);
-    const size_t full_size = aligned_size + ALIGNED_BLOCK_METADATA;
+    chunk_header_t *block_it;
+    chunk_header_t *prev_block = NULL;
+    const size_t aligned_size = ALIGN(size);
+    const size_t full_size = aligned_size + MIN_CHUNK_SIZE;
 
     for (
         block_it = zone->begin;
         block_it != NULL;
         prev_block = block_it, block_it = block_it->next
     ) {
-        if (block_it->size < full_size)
+        if (block_it->payload_size < full_size)
             continue;
 
         void *result = block_it;
         *(size_t*)(result + aligned_size) = size;
-        const size_t remaining_size = block_it->size - full_size;
+        const size_t remaining_size = block_it->payload_size - full_size;
 
-        if (remaining_size < sizeof(freed_block_list_t)) {
-            zone->begin = block_it->next;
-            return result;
+        if (remaining_size < MIN_CHUNK_SIZE) {
+            return NULL;
         }
 
-        freed_block_list_t *next_location = (void*) block_it + full_size;
-        next_location->size = remaining_size;
+        chunk_header_t *next_location = (void*) block_it + full_size;
+        next_location->payload_size = remaining_size;
         next_location->next = block_it->next;
 
         if (prev_block)

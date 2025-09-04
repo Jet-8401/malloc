@@ -5,7 +5,7 @@ endif
 LIBNAME = libft_malloc
 LINK = $(LIBNAME).so
 NAME = $(LIBNAME)_$(HOSTTYPE).so
-CFLAGS = -std=c11 -Wall -Werror -Wextra -fPIC -g -O0
+CFLAGS = -std=gnu11 -Wall -Werror -Wextra -fPIC -g -O0
 # -O3
 
 SRCS =	malloc.c

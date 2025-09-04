@@ -6,7 +6,7 @@
 # include <stddef.h>
 
 # define TINY_ZONE_TRESHOLD 128
-# define SMALL_ZONE_TRESHOLD 1024
+# define SMALL_ZONE_TRESHOLD 2048
 
 // minimum of 8 bytes alignment else respect system requirements for flags
 const char MEM_ALIGNMENT = _Alignof(max_align_t) <= 8 ?
@@ -14,28 +14,38 @@ const char MEM_ALIGNMENT = _Alignof(max_align_t) <= 8 ?
 
 enum ZONE_TYPE { TINY, SMALL, LARGE };
 
-/* ZONE/BLOCKS metadata */
+# define ALIGN(size) ((size + _Alignof(max_align_t) - 1) \
+    & ~(_Alignof(max_align_t) - 1))
 
-// [block_metadata][user_data][size_footer]
+/* chunks metadata */
 
-// [user_data][freed_block_list_t]
-typedef struct freed_block_list_s {
-    struct freed_block_list_s *next;
-    size_t size;
-}   freed_block_list_t;
+typedef enum {
+    IS_FREED = 1 << 0,
+}   chunk_metadata_t;
 
-// typedef struct block_metadata_s {
-// 	size_t size;
-// }	block_metadata_t;
+# define CHUNK_META_MASK 0x7
+
+// Data chunk:
+//  - allocated = [size & flags][payload][prev_size]
+//  - freed = [size & flags][forward and backward pointer][prev_size]
+typedef struct chunk_header_s {
+    size_t payload_size;
+    struct chunk_header_s *next;
+}   chunk_header_t;
+
+typedef struct chunk_footer_s {
+    size_t prev_size;   // same as size inside chunk_header_t
+}   chunk_footer_t;
+
+const char MIN_CHUNK_SIZE = ALIGN(sizeof(chunk_header_t)) + ALIGN(sizeof(chunk_footer_t));
+
+/* zones metadata */
 
 typedef struct zone_metadata_s {
 	struct zone_metadata_s *next;
-	freed_block_list_t *begin;
-	// freed_block_list_t *last;
+	chunk_header_t *begin;
+	// freed_chunk_list_t *last;
 }	zone_metadata_t;
-
-# define ALIGN_SIZE(size) ((size + alignof(max_align_t) - 1) \
-    & ~(alignof(max_align_t) - 1))
 
 /* global allocator structure */
 
