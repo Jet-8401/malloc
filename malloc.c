@@ -57,7 +57,7 @@ static void *search_free_chunk_in_zone(
         chunk_it != NULL;
         prev_chunk = chunk_it, chunk_it = chunk_it->next
     ) {
-        // if the remaining size of not enough to fir the metadata of a freed
+        // if the remaining size of not enough to fit the metadata of a freed
         // chunk, then move the pointer of the zone and don't return anything
         if (chunk_it->payload_size < (size_t) MIN_FREED_CHUNK_SIZE) {
             zone->begin = chunk_it->next;
