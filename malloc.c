@@ -32,63 +32,66 @@ static int allocate_zone(
         return -1;
 
     const size_t ps = sysconf(_SC_PAGESIZE);
+    const size_t full_alloc = ((size + ps - 1) / ps) * ps;
     // Instead of just puting the argument `size` inside the list metadata
     // we calculate the size based on the page size because mmap will return
     // an address aligned to it therefore, it might allocate a lot more than
     // what was requested.
     // That way we account for the full allocated size.
-    (*zone)->begin = ((void*) *zone) + ALIGNED_ZONE_METADATA;
-    (*zone)->begin->payload_size = ((size + ps - 1) / ps) * ps - ALIGNED_ZONE_METADATA;
+    (*zone)->begin = (void*) zone + ALIGNED_ZONE_METADATA;
+    (*zone)->begin->payload_size = full_alloc - ALIGNED_ZONE_METADATA - CHUNK_HEADER_SIZE;
 
     return 0;
 }
 
 // return an address that fit the size parameter or NULL if can't find one
-static void *search_free_block_in_zone(
+static void *search_free_chunk_in_zone(
     zone_metadata_t *zone,
     const size_t size
 ) {
-    chunk_header_t *block_it;
-    chunk_header_t *prev_block = NULL;
-    const size_t aligned_size = ALIGN(size);
-    const size_t full_size = aligned_size + MIN_CHUNK_SIZE;
+    freed_chunk_header_t *chunk_it;
+    freed_chunk_header_t *prev_chunk = NULL;
 
     for (
-        block_it = zone->begin;
-        block_it != NULL;
-        prev_block = block_it, block_it = block_it->next
+        chunk_it = zone->begin;
+        chunk_it != NULL;
+        prev_chunk = chunk_it, chunk_it = chunk_it->next
     ) {
-        if (block_it->payload_size < full_size)
-            continue;
-
-        void *result = block_it;
-        *(size_t*)(result + aligned_size) = size;
-        const size_t remaining_size = block_it->payload_size - full_size;
-
-        if (remaining_size < MIN_CHUNK_SIZE) {
+        // if the remaining size of not enough to fir the metadata of a freed
+        // chunk, then move the pointer of the zone and don't return anything
+        if (chunk_it->payload_size < (size_t) MIN_FREED_CHUNK_SIZE) {
+            zone->begin = chunk_it->next;
             return NULL;
         }
 
-        chunk_header_t *next_location = (void*) block_it + full_size;
-        next_location->payload_size = remaining_size;
-        next_location->next = block_it->next;
+        // setup metadata of the newly allocated chunk
+        size_t flags = chunk_it->payload_size & CHUNK_META_MASK;
+        chunk_it->payload_size = size | flags;
+        // size_t full_size = MIN_CHUNK_SIZE + ALIGN(size);
 
-        if (prev_block)
-            prev_block->next = next_location;
+        // calculate where to move the freed chunk
+        size_t allocated_size_aligned = CHUNK_HEADER_SIZE + ALIGN(size);
+        freed_chunk_header_t *next_freed_chunk =
+            ((void*) chunk_it) + allocated_size_aligned;
+        next_freed_chunk->payload_size &= ~IS_PREV_FREE;
+
+        if (prev_chunk)
+            prev_chunk->next = next_freed_chunk;
         else
-            zone->begin = next_location;
+            zone->begin = next_freed_chunk;
 
-        return result;
+        // return the user payload from the allocated chunk
+        return ((void*) chunk_it) + CHUNK_HEADER_SIZE;
     }
 
     return NULL;
 }
 
-static void* search_freed_block(zone_metadata_t *zone, const size_t size) {
+static void* search_freed_chunk(zone_metadata_t *zone, const size_t size) {
     zone_metadata_t *zone_it = zone;
 
     while (zone_it) {
-        void* result = search_free_block_in_zone(zone_it, size);
+        void* result = search_free_chunk_in_zone(zone_it, size);
         if (result)
             return result;
         zone_it = zone_it->next;
@@ -96,6 +99,8 @@ static void* search_freed_block(zone_metadata_t *zone, const size_t size) {
 
     return NULL;
 }
+
+#include <stdlib.h>
 
 void *malloc(size_t size) {
     // get the zone type based on the size
@@ -114,9 +119,9 @@ void *malloc(size_t size) {
         return NULL;
     }
 
-    void *block = search_freed_block(*zone, size);
-    if (block)
-        return block;
+    void *chunk = search_freed_chunk(*zone, size);
+    if (chunk)
+        return chunk;
 
     zone_metadata_t *zone_it = *zone;
     while (zone_it->next != NULL)
@@ -124,5 +129,5 @@ void *malloc(size_t size) {
     if (allocate_zone(&(zone_it->next), size, zone_type) == -1)
         return NULL;
 
-    return search_freed_block(*zone, size);
+    return search_freed_chunk(*zone, size);
 }
