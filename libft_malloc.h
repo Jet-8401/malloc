@@ -30,11 +30,11 @@ typedef enum {
 //  - allocated = [size & flags][payload][prev_size]
 //  - freed = [size & flags][forward and backward pointer][prev_size]
 typedef struct chunk_header_s {
-    size_t payload_size;
+    size_t size;
 }   chunk_header_t;
 
 typedef struct freed_chunk_header_s {
-    size_t payload_size;
+    size_t size;
     struct freed_chunk_header_s *next;
 }   freed_chunk_header_t;
 
@@ -57,14 +57,21 @@ typedef struct zone_metadata_s {
 /* global allocator structure */
 
 typedef struct allocator_s {
-	zone_metadata_t* tiny_zone;
-	zone_metadata_t* small_zone;
-	zone_metadata_t* large_zone;
+	zone_metadata_t *tiny_zone;
+	zone_metadata_t *small_zone;
+	zone_metadata_t *large_zone;
 }	allocator_t;
 
 extern allocator_t g_allocator;
 
 /* utils function */
+
+struct zone_info_s {
+	zone_metadata_t **zone;
+	enum ZONE_TYPE type;
+};
+
+struct zone_info_s _get_zone_infos(const size_t size);
 
 /* functions prototypes */
 
