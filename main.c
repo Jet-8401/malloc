@@ -1,21 +1,23 @@
-#include "libft_malloc.h"
-#include <unistd.h>
+// #include "libft_malloc.h"
+#include <stddef.h>
+#include <stdlib.h>
 
 int main() {
+    const size_t alloc_size = 4096;
+
+    const size_t iterations = 80;
+    void* addresses[iterations];
+
+    for (int i = 0; i < iterations; i++) {
+        addresses[i] = malloc(alloc_size);
+    }
+
     int *value = malloc(sizeof(int));
-    if (!value)
-        return 1;
-    *value = 45;
+    *value = 50;
 
-    free(value);
-
-    value = malloc(sizeof(int));
-    *value = 102;
-    free(value);
-
-    value = malloc(sizeof(int));
-    if (!value)
-        return 1;
+    for (int i = 0; i < iterations; i++) {
+        free(addresses[i]);
+    }
 
     free(value);
 

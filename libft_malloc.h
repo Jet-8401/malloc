@@ -10,7 +10,7 @@
 # define SMALL_ZONE_TRESHOLD 2048
 
 // minimum of 8 bytes alignment else respect system requirements for flags
-extern const char MEM_ALIGNMENT;
+extern const unsigned char MEM_ALIGNMENT;
 
 enum ZONE_TYPE { TINY, SMALL, LARGE };
 
@@ -42,13 +42,14 @@ typedef struct chunk_footer_s {
     size_t prev_size;   // same as size inside chunk_header_t
 }   chunk_footer_t;
 
-extern const char CHUNK_HEADER_SIZE;
-extern const char CHUNK_FOOTER_SIZE;
-extern const char MIN_FREED_CHUNK_SIZE;
+extern const unsigned char CHUNK_HEADER_SIZE;
+extern const unsigned char CHUNK_FOOTER_SIZE;
+extern const unsigned char MIN_FREED_CHUNK_SIZE;
 
 /* zones metadata */
 
 typedef struct zone_metadata_s {
+	size_t size;
 	struct zone_metadata_s *next;
 	freed_chunk_header_t *begin;
 	// freed_chunk_list_t *last;
