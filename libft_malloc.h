@@ -14,8 +14,7 @@ extern const unsigned char MEM_ALIGNMENT;
 
 enum ZONE_TYPE { TINY, SMALL, LARGE };
 
-# define ALIGN(size) ((size + _Alignof(max_align_t) - 1) \
-    & ~(_Alignof(max_align_t) - 1))
+# define ALIGN(size) ((size + MEM_ALIGNMENT - 1) & ~(MEM_ALIGNMENT - 1))
 
 /* chunks metadata */
 
@@ -54,6 +53,8 @@ typedef struct zone_metadata_s {
 	freed_chunk_header_t *begin;
 	// freed_chunk_list_t *last;
 }	zone_metadata_t;
+
+extern const unsigned char ALIGNED_ZONE_METADATA;
 
 /* global allocator structure */
 
