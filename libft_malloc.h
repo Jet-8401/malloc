@@ -60,7 +60,7 @@ typedef struct zone_metadata_s {
 	size_t size;
 	struct zone_metadata_s *next;
 	freed_chunk_header_t *begin;
-	// freed_chunk_list_t *last;
+	chunk_header_t *top;
 }	zone_metadata_t;
 
 extern const unsigned char ALIGNED_ZONE_METADATA;
