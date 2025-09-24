@@ -10,12 +10,6 @@
        __typeof__ (b) _b = (b); \
      _a > _b ? _a : _b; })
 
-// static const size_t TINY_ZONE_ALLOC = (TINY_ZONE_TRESHOLD + CHUNK_HEADER_SIZE) * MIN_ALLOCS;
-
-// static const size_t MIN_ALLOCS = 100;
-// static const size_t TINY_ZONE_ALLOC = TINY_ZONE_TRESHOLD * MIN_ALLOCS;
-// static const size_t SMALL_ZONE_ALLOC = SMALL_ZONE_TRESHOLD * MIN_ALLOCS;
-
 /* Allocate new zone and return its address.
  * Return NULL in case of error and set errno.
  */
@@ -51,15 +45,16 @@ static zone_metadata_t* allocate_zone(
     zone->size = size;
     zone->next = NULL;
 
-    zone->begin = ((void*)zone) + ALIGNED_ZONE_METADATA;
-    zone->begin->size = size - ALIGNED_ZONE_METADATA;
-    zone->begin->next = NULL;
+    zone->top = ((void*)zone) + ALIGNED_ZONE_METADATA;
+    zone->top->size = size - ALIGNED_ZONE_METADATA;
+
+    zone->begin = NULL;
 
     return zone;
 }
 
 // return an address that fit the size parameter or NULL if can't find one
-// TODO:  check that the chunk size allocated is >= to MIN_FREED_CHUNK_SIZE
+// TODO: check that the chunk size allocated is >= to MIN_FREED_CHUNK_SIZE
 static void *search_free_chunk_in_zone(
     zone_metadata_t *zone,
     const size_t size
@@ -106,20 +101,29 @@ static void *search_free_chunk_in_zone(
     return NULL;
 }
 
-static void* search_freed_chunk(zone_metadata_t *zone, const size_t size) {
+struct search_result_s {
+    void            *chunk;
+    zone_metadata_t *last_zone;
+};
+
+static struct search_result_s search_freed_chunk(
+    zone_metadata_t *zone, const size_t size
+) {
     zone_metadata_t *zone_it = zone;
+    zone_metadata_t *last = zone;
 
     while (zone_it) {
+        last = zone_it;
         void* result = search_free_chunk_in_zone(zone_it, size);
         if (result)
-            return result;
+            return (struct search_result_s){ .chunk=result, .last_zone=last };
         zone_it = zone_it->next;
     }
 
-    return NULL;
+    return (struct search_result_s){ .chunk=NULL, .last_zone=last };
 }
 
-void zone_push_last(zone_metadata_t **src, zone_metadata_t *element) {
+static void zone_push_last(zone_metadata_t **src, zone_metadata_t *element) {
     if (*src == NULL) {
         *src = element;
         return;
@@ -131,6 +135,42 @@ void zone_push_last(zone_metadata_t **src, zone_metadata_t *element) {
     zone_it->next = element;
 }
 
+static void* carve_from_top_chunk(zone_metadata_t *zone, size_t size) {
+    size = max(ALIGN(size) + CHUNK_HEADER_SIZE, MIN_FREED_CHUNK_SIZE);
+
+    const void* next_top = (void*) zone->top + size;
+    if (next_top > (void*) zone + zone->size)
+        return NULL; // Not enough space
+
+    chunk_header_t* chunk = (void*) zone->top;
+    const size_t inherited_flags = chunk->size & CHUNK_META_MASK;
+
+    // inherit the "Top Chunk" size without the headers
+    const size_t previous_size = zone->top->size & ~CHUNK_META_MASK;
+    zone->top = (void*) next_top; // Changing "Top Chunk" location
+    zone->top->size = previous_size - size;
+
+    chunk->size = size | inherited_flags;
+    return (void*) chunk + CHUNK_HEADER_SIZE;
+}
+
+// Return NULL if not found any block.
+static void *search_chunk(struct zone_info_s infos, size_t size) {
+    // first search from the freed list
+    struct search_result_s res = search_freed_chunk(*infos.zone, size);
+    if (res.chunk)
+        return res.chunk;
+
+    // then if the exist carve some raw space for the allocated chunk
+    if (res.last_zone) {
+        void* chunk = carve_from_top_chunk(res.last_zone, size);
+        if (chunk)
+            return chunk;
+    }
+
+    return NULL;
+}
+
 void *malloc(size_t size) {
     if (size == 0)
         return NULL;
@@ -138,7 +178,7 @@ void *malloc(size_t size) {
     struct zone_info_s infos = _get_zone_infos(size);
 
     if (infos.type != LARGE) {
-        void *chunk = search_freed_chunk(*infos.zone, size);
+        void* chunk = search_chunk(infos, size);
         if (chunk)
             return chunk;
     }
@@ -148,5 +188,5 @@ void *malloc(size_t size) {
         return NULL;
     zone_push_last(infos.zone, new_zone);
 
-    return search_free_chunk_in_zone(new_zone, size);
+    return carve_from_top_chunk(new_zone, size);
 }

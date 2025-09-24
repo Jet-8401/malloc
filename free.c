@@ -62,3 +62,8 @@ void free(void *ptr) {
 
     return;
 }
+
+// Top Chunk strategy:
+// We need to create a dynamic boudary tags called "Top Chunk" for forward
+// coalescing, this is because backwards coalescing is already handled via
+// the LSB of the size meta data since the alignment is minimum of 8 bytes.
