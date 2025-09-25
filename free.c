@@ -24,8 +24,12 @@ static zone_metadata_t *get_subzone(zone_metadata_t *zone, void *ptr) {
 // here we need to check the next chunk, if its free we need to add that to
 // the total size that will be updated.
 
-// Note: When freeing a point we need to check for the chunks surrounding it
-// inside memory to coalesce it if needed.
+// Note:
+//  - When freeing a point we need to check for the chunks surrounding it
+//    inside memory to coalesce it if needed.
+//  - If a chunk is freed right next to the "Top Chunk" it will absord it
+//    and expand its size rather than creating an other freed chunk and append
+//    it to the free list.
 void free(void *ptr) {
     if (ptr == NULL)
         return;
@@ -38,15 +42,34 @@ void free(void *ptr) {
     // first establish in which scenarios we are in to check if we need to
     // access the zone metadata
 
+    chunk_header_t *range_begin = meta;
     char flags = meta->size & CHUNK_META_MASK;
+    while (flags & IS_PREV_FREE) {
+        // get the previous chunk size from the footer
+        size_t prev_size = *(size_t*)((void*)range_begin -
+            sizeof(freed_chunk_footer_t));
+        range_begin = ((void*) range_begin) - prev_size;
+        flags = range_begin->size & CHUNK_META_MASK;
+    }
+
     if (flags & IS_PREV_FREE) {
         // we can coalesce with previous chunk
     }
 
-    // forward coalescing
+    // for forward coalescing we need to take two chunks ahead or checking
+    // with the "Top Chunk"
+
     chunk_header_t *next_p = ((void*) meta) + meta->size;   // [meta][next_p]
+    if (next_p == (*infos.zone)->top) {
+        // expand the top chunk backward
+    }
     // check if the `next_p` is the last element of a zone
-    next_p = next_p + ((chunk_header_t*) next_p)->size;     // [meta][...][next_p]
+    next_p = (void*) next_p + next_p->size;                 // [meta][...][next_p]
+    if (next_p == (*infos.zone)->top) {
+        // expand the top chunk backward
+    } else {
+        // create a freed chunk and append it to the free list
+    }
 
     // here `next_p` is the base of the iteration
 
