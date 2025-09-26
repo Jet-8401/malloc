@@ -39,41 +39,34 @@ void free(void *ptr) {
         (meta->size & ~CHUNK_META_MASK) - CHUNK_HEADER_SIZE // payload size
     );
 
-    // first establish in which scenarios we are in to check if we need to
-    // access the zone metadata
+    // to start we initialize the range to free to coalesce free chunks
+    // with the range (range_begin, range_end]
 
     chunk_header_t *range_begin = meta;
-    char flags = meta->size & CHUNK_META_MASK;
-    while (flags & IS_PREV_FREE) {
+    while (range_begin->size & IS_PREV_FREE) {
         // get the previous chunk size from the footer
         size_t prev_size = *(size_t*)((void*)range_begin -
-            sizeof(freed_chunk_footer_t));
+            sizeof(freed_chunk_footer_t)) & ~CHUNK_META_MASK;
         range_begin = ((void*) range_begin) - prev_size;
-        flags = range_begin->size & CHUNK_META_MASK;
     }
 
-    if (flags & IS_PREV_FREE) {
-        // we can coalesce with previous chunk
-    }
-
-    // for forward coalescing we need to take two chunks ahead or checking
+    chunk_header_t *range_end = (void*) meta + (meta->size & ~CHUNK_META_MASK);
+    chunk_header_t *next_p = range_end;
+    // for forward coalescing we need to take two chunks ahead for checking
     // with the "Top Chunk"
-
-    chunk_header_t *next_p = ((void*) meta) + meta->size;   // [meta][next_p]
-    if (next_p == (*infos.zone)->top) {
-        // expand the top chunk backward
-    }
-    // check if the `next_p` is the last element of a zone
-    next_p = (void*) next_p + next_p->size;                 // [meta][...][next_p]
-    if (next_p == (*infos.zone)->top) {
-        // expand the top chunk backward
-    } else {
-        // create a freed chunk and append it to the free list
+    while (next_p != (*infos.zone)->top) {
+        // save the n+1 chunk size
+        size_t prev_size = (next_p->size & ~CHUNK_META_MASK);
+        // move next_p to n+2
+        next_p = (void*) next_p + prev_size;
+        // check the flags of the n+2 chunk to know if the n+1 is free
+        if (!(next_p->size & IS_PREV_FREE))
+            break;
+        range_end = (void*) next_p;
     }
 
-    // here `next_p` is the base of the iteration
-
-    // base = meta + meta->size
+    // then we can establish in which scenarios we are to check if we need to
+    // access the zone metadata
 
     zone_metadata_t *zone = get_subzone(*infos.zone, meta);
     if (zone)
