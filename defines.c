@@ -13,7 +13,7 @@ const unsigned char ALIGNED_ZONE_METADATA = ALIGN(sizeof(zone_metadata_t));
 /* Chunks defines */
 const unsigned char CHUNK_HEADER_SIZE = ALIGN(sizeof(chunk_header_t));
 const unsigned char MIN_FREED_CHUNK_SIZE = ALIGN(
-    sizeof(freed_chunk_header_t) + sizeof(freed_chunk_footer_t)
+    sizeof(freed_header_t) + sizeof(freed_footer_t)
 );
 
 /* Zones defines */

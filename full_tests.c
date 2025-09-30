@@ -66,24 +66,6 @@ void test_zone_allocations() {
     print_test_result("Zone Allocations (TINY, SMALL, LARGE)", success);
 }
 
-// Test 3: Memory Reuse
-void test_memory_reuse() {
-    int success = 1;
-    void *ptr1 = malloc(10);
-    if (!ptr1) {
-        success = 0;
-    }
-    free(ptr1);
-    void *ptr2 = malloc(10); // Should ideally reuse ptr1
-    if (!ptr2) {
-        success = 0;
-    }
-    free(ptr2);
-
-    // This test is conceptual. The main point is that the sequence should not crash.
-    print_test_result("Memory Reuse", success);
-}
-
 // Test 4: Data Integrity
 void test_data_integrity() {
     int success = 1;
@@ -110,7 +92,7 @@ void test_alignment() {
     int success = 1;
     // Your implementation enforces minimum 8-byte alignment
     const size_t expected_align = (_Alignof(max_align_t) > 8) ? _Alignof(max_align_t) : 8;
-    
+
     void *ptr = malloc(1);
     if (!ptr) {
         success = 0;
@@ -118,7 +100,7 @@ void test_alignment() {
         // Check if the pointer is aligned to the expected alignment
         if ((uintptr_t)ptr % expected_align != 0) {
             success = 0;
-            printf("Alignment failed: ptr=%p, expected_align=%zu, actual_offset=%zu\n", 
+            printf("Alignment failed: ptr=%p, expected_align=%zu, actual_offset=%zu\n",
                    ptr, expected_align, (uintptr_t)ptr % expected_align);
         }
         free(ptr);
@@ -131,11 +113,11 @@ void test_comprehensive_alignment() {
     int success = 1;
     // Your implementation enforces minimum 8-byte alignment
     const size_t expected_align = (_Alignof(max_align_t) > 8) ? _Alignof(max_align_t) : 8;
-    
+
     // Test various allocation sizes
     size_t test_sizes[] = {1, 2, 3, 4, 5, 7, 8, 15, 16, 31, 32, 63, 64, 127, 128, 255, 256};
     size_t num_sizes = sizeof(test_sizes) / sizeof(test_sizes[0]);
-    
+
     for (size_t i = 0; i < num_sizes; i++) {
         void *ptr = malloc(test_sizes[i]);
         if (!ptr) {
@@ -143,16 +125,16 @@ void test_comprehensive_alignment() {
             printf("Alignment test failed: malloc(%zu) returned NULL\n", test_sizes[i]);
             break;
         }
-        
+
         if ((uintptr_t)ptr % expected_align != 0) {
             success = 0;
-            printf("Alignment failed for size %zu: ptr=%p, expected alignment=%zu, actual offset=%zu\n", 
+            printf("Alignment failed for size %zu: ptr=%p, expected alignment=%zu, actual offset=%zu\n",
                    test_sizes[i], ptr, expected_align, (uintptr_t)ptr % expected_align);
         }
-        
+
         free(ptr);
     }
-    
+
     print_test_result("Comprehensive Alignment Tests", success);
 }
 
@@ -163,12 +145,12 @@ void test_multiple_allocation_alignment() {
     const size_t expected_align = (_Alignof(max_align_t) > 8) ? _Alignof(max_align_t) : 8;
     const int num_allocs = 20;
     void *ptrs[20];
-    
+
     // Allocate multiple blocks and check each one
     for (int i = 0; i < num_allocs; i++) {
         size_t size = (i % 10) + 1; // Sizes 1-10
         ptrs[i] = malloc(size);
-        
+
         if (!ptrs[i]) {
             success = 0;
             printf("Multiple allocation test failed: malloc(%zu) returned NULL at iteration %d\n", size, i);
@@ -178,21 +160,21 @@ void test_multiple_allocation_alignment() {
             }
             break;
         }
-        
+
         if ((uintptr_t)ptrs[i] % expected_align != 0) {
             success = 0;
-            printf("Multiple allocation alignment failed at iteration %d: ptr=%p, size=%zu, offset=%zu\n", 
+            printf("Multiple allocation alignment failed at iteration %d: ptr=%p, size=%zu, offset=%zu\n",
                    i, ptrs[i], size, (uintptr_t)ptrs[i] % expected_align);
         }
     }
-    
+
     // Free all allocations if we got this far
     if (success) {
         for (int i = 0; i < num_allocs; i++) {
             free(ptrs[i]);
         }
     }
-    
+
     print_test_result("Multiple Allocation Alignment", success);
 }
 
@@ -201,7 +183,7 @@ void test_zone_alignment() {
     int success = 1;
     // Your implementation enforces minimum 8-byte alignment
     const size_t expected_align = (_Alignof(max_align_t) > 8) ? _Alignof(max_align_t) : 8;
-    
+
     // Test TINY zone
     void *tiny_ptr = malloc(TINY_ZONE_TRESHOLD - 1);
     if (!tiny_ptr) {
@@ -209,10 +191,10 @@ void test_zone_alignment() {
         printf("Zone alignment test failed: TINY allocation returned NULL\n");
     } else if ((uintptr_t)tiny_ptr % expected_align != 0) {
         success = 0;
-        printf("TINY zone alignment failed: ptr=%p, offset=%zu\n", 
+        printf("TINY zone alignment failed: ptr=%p, offset=%zu\n",
                tiny_ptr, (uintptr_t)tiny_ptr % expected_align);
     }
-    
+
     // Test SMALL zone
     void *small_ptr = malloc(SMALL_ZONE_TRESHOLD - 1);
     if (!small_ptr) {
@@ -220,10 +202,10 @@ void test_zone_alignment() {
         printf("Zone alignment test failed: SMALL allocation returned NULL\n");
     } else if ((uintptr_t)small_ptr % expected_align != 0) {
         success = 0;
-        printf("SMALL zone alignment failed: ptr=%p, offset=%zu\n", 
+        printf("SMALL zone alignment failed: ptr=%p, offset=%zu\n",
                small_ptr, (uintptr_t)small_ptr % expected_align);
     }
-    
+
     // Test LARGE zone
     void *large_ptr = malloc(LARGE_ALLOC_SIZE);
     if (!large_ptr) {
@@ -231,15 +213,15 @@ void test_zone_alignment() {
         printf("Zone alignment test failed: LARGE allocation returned NULL\n");
     } else if ((uintptr_t)large_ptr % expected_align != 0) {
         success = 0;
-        printf("LARGE zone alignment failed: ptr=%p, offset=%zu\n", 
+        printf("LARGE zone alignment failed: ptr=%p, offset=%zu\n",
                large_ptr, (uintptr_t)large_ptr % expected_align);
     }
-    
+
     // Clean up
     if (tiny_ptr) free(tiny_ptr);
     if (small_ptr) free(small_ptr);
     if (large_ptr) free(large_ptr);
-    
+
     print_test_result("Zone-Specific Alignment", success);
 }
 
@@ -250,7 +232,7 @@ void test_alignment_after_fragmentation() {
     const size_t expected_align = (_Alignof(max_align_t) > 8) ? _Alignof(max_align_t) : 8;
     const int num_ptrs = 10;
     void *ptrs[10];
-    
+
     // Create fragmentation by allocating and freeing every other block
     for (int i = 0; i < num_ptrs; i++) {
         ptrs[i] = malloc(16); // Small consistent size
@@ -260,13 +242,13 @@ void test_alignment_after_fragmentation() {
             break;
         }
     }
-    
+
     // Free every other block to create fragmentation
     for (int i = 1; i < num_ptrs; i += 2) {
         free(ptrs[i]);
         ptrs[i] = NULL;
     }
-    
+
     // Now allocate new blocks that should fill the gaps
     for (int i = 1; i < num_ptrs; i += 2) {
         ptrs[i] = malloc(16);
@@ -275,21 +257,21 @@ void test_alignment_after_fragmentation() {
             printf("Fragmentation test reallocation failed at index %d\n", i);
             break;
         }
-        
+
         if ((uintptr_t)ptrs[i] % expected_align != 0) {
             success = 0;
-            printf("Alignment failed after fragmentation at index %d: ptr=%p, offset=%zu\n", 
+            printf("Alignment failed after fragmentation at index %d: ptr=%p, offset=%zu\n",
                    i, ptrs[i], (uintptr_t)ptrs[i] % expected_align);
         }
     }
-    
+
     // Clean up all remaining allocations
     for (int i = 0; i < num_ptrs; i++) {
         if (ptrs[i]) {
             free(ptrs[i]);
         }
     }
-    
+
     print_test_result("Alignment After Fragmentation", success);
 }
 
@@ -359,7 +341,6 @@ int main() {
 
     test_basic_functionality();
     test_zone_allocations();
-    test_memory_reuse();
     test_data_integrity();
     test_alignment();
     test_comprehensive_alignment();

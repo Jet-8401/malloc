@@ -36,15 +36,15 @@ typedef struct chunk_header_s {
 }   chunk_header_t;
 
 // freed_* structures are metadata that apply only for freed chunks
-typedef struct freed_chunk_header_s {
+typedef struct freed_header_s {
     size_t size;
-    struct freed_chunk_header_s *next;
-    struct freed_chunk_header_s *prev;
-}   freed_chunk_header_t;
+    struct freed_header_s *next;
+    struct freed_header_s *prev;
+}   freed_header_t;
 
-typedef struct freed_chunk_footer_s {
+typedef struct freed_footer_s {
     size_t prev_size;   // same as size inside chunk_header_t
-}   freed_chunk_footer_t;
+}   freed_footer_t;
 
 extern const unsigned char CHUNK_HEADER_SIZE;
 extern const unsigned char MIN_FREED_CHUNK_SIZE;
@@ -59,7 +59,7 @@ enum ZONE_TYPE { TINY, SMALL, LARGE };
 typedef struct zone_metadata_s {
 	size_t size;
 	struct zone_metadata_s *next;
-	freed_chunk_header_t *begin;
+	freed_header_t *begin;
 	chunk_header_t *top;
 }	zone_metadata_t;
 
@@ -88,6 +88,8 @@ struct zone_info_s {
 };
 
 struct zone_info_s _get_zone_infos(const size_t size);
+
+#define UNMASK(size) (size & ~CHUNK_META_MASK)
 
 /* functions prototypes */
 

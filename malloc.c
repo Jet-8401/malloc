@@ -59,8 +59,8 @@ static void *search_free_chunk_in_zone(
     zone_metadata_t *zone,
     const size_t size
 ) {
-    freed_chunk_header_t *it;
-    freed_chunk_header_t *prev_chunk = NULL;
+    freed_header_t *it;
+    freed_header_t *prev_chunk = NULL;
     const size_t min_size = max(
         ALIGN(size) + CHUNK_HEADER_SIZE, MIN_FREED_CHUNK_SIZE
     );
@@ -70,22 +70,23 @@ static void *search_free_chunk_in_zone(
         it != NULL;
         prev_chunk = it, it = it->next
     ) {
-        if (it->size < min_size)
+        size_t raw_it_size = UNMASK(it->size);
+        if (raw_it_size < min_size)
             continue;
 
-        size_t remaining_size = it->size - min_size;
+        size_t remaining_size = raw_it_size - min_size;
 
         chunk_header_t *alloc_chunk = (void*) it;
         alloc_chunk->size = min_size;
 
-        freed_chunk_header_t *remainder;
+        freed_header_t *remainder;
         // if the remaining size cannot fit a freed chunk's metadata
         // then we don't split
         if (remaining_size < MIN_FREED_CHUNK_SIZE) {
-            alloc_chunk->size = it->size;
+            alloc_chunk->size = raw_it_size;
             remainder = NULL;
         } else {
-            remainder = ((void*)it) + alloc_chunk->size;
+            remainder = (void*) it + UNMASK(alloc_chunk->size);
             remainder->next = it->next;
             remainder->size = remaining_size;
         }
@@ -146,7 +147,7 @@ static void* carve_from_top_chunk(zone_metadata_t *zone, size_t size) {
     const size_t inherited_flags = chunk->size & CHUNK_META_MASK;
 
     // inherit the "Top Chunk" size without the headers
-    const size_t previous_size = zone->top->size & ~CHUNK_META_MASK;
+    const size_t previous_size = UNMASK(zone->top->size);
     zone->top = (void*) next_top; // Changing "Top Chunk" location
     zone->top->size = previous_size - size;
 
