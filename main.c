@@ -313,14 +313,14 @@ void test_original_case() {
 int main() {
     printf("Starting comprehensive coalescing tests...\n");
 
-    // test_original_case();
+    test_original_case();
     test_backward_coalescing();
-    // test_forward_coalescing();
-    // test_bidirectional_coalescing();
-    // test_fragmentation_coalescing();
-    // test_top_chunk_absorption();
-    // test_edge_cases();
-    // test_stress_coalescing();
+    test_forward_coalescing();
+    test_bidirectional_coalescing();
+    test_fragmentation_coalescing();
+    test_top_chunk_absorption();
+    test_edge_cases();
+    test_stress_coalescing();
 
     printf("\n=== All Tests Completed ===\n");
     printf("If no crashes occurred, basic coalescing functionality is working.\n");
