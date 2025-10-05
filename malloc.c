@@ -91,7 +91,8 @@ static void *search_free_chunk_in_zone(
             remainder->size = remaining_size;
 
             // update the footer of the freed chunk
-            chunk_header_t *footer = (void*) remainder + remainder->size - sizeof(freed_footer_t);
+            size_t footer_offset = remainder->size - sizeof(freed_footer_t);
+            chunk_header_t *footer = (void*) remainder + footer_offset;
             footer->size = remainder->size;
         }
 
