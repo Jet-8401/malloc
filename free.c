@@ -51,11 +51,13 @@ static zone_metadata_t *get_subzone(zone_metadata_t *zone, void *ptr) {
 
 // TODO: check if a union could be usefull
 
-void _remove_chunk_from_freelist(freed_header_t *chunk, zone_metadata_t *zone) {
+static void _remove_chunk_from_freelist(
+    freed_header_t *chunk,
+    zone_metadata_t *zone
+) {
     if (chunk->prev) {
         chunk->prev->next = chunk->next;
     } else {
-        // This chunk is the head of the list
         zone->begin = chunk->next;
     }
 
@@ -68,34 +70,19 @@ void _remove_chunk_from_freelist(freed_header_t *chunk, zone_metadata_t *zone) {
 }
 
 void free(void* ptr) {
-    if (!ptr)
+    if (ptr == NULL)
         return;
 
     freed_header_t *meta = ptr - CHUNK_HEADER_SIZE;
     meta->next = NULL;
     meta->prev = NULL;
+
     struct zone_info_s inf = _get_zone_infos(
         UNMASK(meta->size) - CHUNK_HEADER_SIZE // payload size
     );
     zone_metadata_t *zone = get_subzone(*inf.zone, ptr);
     if (!zone)
         return;
-
-    uint8_t actions = COALESCE_NONE;
-
-    if (meta->size & IS_PREV_FREE)
-        actions |= COALESCE_BACKWARD;
-
-    chunk_header_t *fw_chunk = (void*) meta + UNMASK(meta->size);
-    if (fw_chunk != zone->top) {
-        chunk_header_t *it = (void*) fw_chunk + UNMASK(fw_chunk->size);
-        if (it->size & IS_PREV_FREE) {
-            // if forward_chunk is freed
-            actions |= COALESCE_FORWARD;
-        }
-    } else {
-        actions |= TOP_CHUNK_ABSORB;
-    }
 
     // COALESCE_NONE = adding free chunk to list
     // COALESCE_BACKWARD = updating the backward chunk already in free list
@@ -108,6 +95,22 @@ void free(void* ptr) {
     // COALESCE_BACKWARD & TOP_CHUNK_ABSORB = remove every references from free
     // list and update the position of the top chunk
     // COALESCE_FORWARD & TOP_CHUNK_ABSORB = only update the top chunk position
+
+    uint8_t actions = COALESCE_NONE;
+
+    if (meta->size & IS_PREV_FREE)
+        actions |= COALESCE_BACKWARD;
+
+    // note: `fw_chunk` is used to calculate forward coalescing later in code
+    chunk_header_t *fw_chunk = (void*) meta + UNMASK(meta->size);
+    if (fw_chunk != zone->top) {
+        chunk_header_t *it = (void*) fw_chunk + UNMASK(fw_chunk->size);
+        if (it->size & IS_PREV_FREE) {
+            actions |= COALESCE_FORWARD;
+        }
+    } else {
+        actions |= TOP_CHUNK_ABSORB;
+    }
 
     // strategies[actions](meta, zone);
 
@@ -127,10 +130,9 @@ void free(void* ptr) {
     }
 
     if (actions & COALESCE_FORWARD) {
-        freed_header_t *next_chunk = (void*) meta + UNMASK(meta->size);
-        final_size += UNMASK(next_chunk->size);
+        final_size += UNMASK(fw_chunk->size);
 
-        _remove_chunk_from_freelist(next_chunk, zone);
+        _remove_chunk_from_freelist((freed_header_t*) fw_chunk, zone);
     }
 
     if (actions & TOP_CHUNK_ABSORB) {
@@ -159,14 +161,15 @@ void free(void* ptr) {
     if (!coalesced_backward) {
         target->prev = NULL;
         target->next = zone->begin;
-        if (zone->begin) {
-            zone->begin->prev = target;
+        if (target->next) {
+            target->next->prev = target;
         }
         zone->begin = target;
     }
+    return;
 }
 
 // Top Chunk strategy:
 // We need to create a dynamic boudary tags called "Top Chunk" for forward
 // coalescing, this is because backwards coalescing is already handled via
-// the LSB of the size meta data since the alignment is minimum of 8 bytes.
+// the LSB of the size metadata since the alignment is minimum of 8 bytes.

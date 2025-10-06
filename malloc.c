@@ -53,8 +53,38 @@ static zone_metadata_t* allocate_zone(
     return zone;
 }
 
+// static bool split_remaining_memory(size_t remaining_size) {
+//     if ()
+
+//     freed_header_t *remainder;
+
+//     // if the remaining size cannot fit a freed chunk's metadata
+//     // then we don't split
+
+//     if (remaining_size < MIN_FREED_CHUNK_SIZE) {
+//         remainder = NULL;
+//     } else {
+//         remainder = (void*) it + UNMASK(alloc_chunk->size);
+//         remainder->next = it->next;
+//         remainder->prev = prev_chunk;
+//         remainder->size = remaining_size | (it->size & CHUNK_META_MASK);
+
+//         // update the footer of the freed chunk
+//         size_t footer_offset = remainder->size - sizeof(freed_footer_t);
+//         freed_footer_t *footer = (void*) remainder + footer_offset;
+//         footer->prev_size = remainder->size;
+//     }
+
+//     if (remainder && remainder->next)
+//         remainder->next->prev = remainder;
+
+//     if (prev_chunk)
+//         prev_chunk->next = remainder;
+//     else
+//         zone->begin = remainder;
+// }
+
 // return an address that fit the size parameter or NULL if can't find one
-// TODO: check that the chunk size allocated is >= to MIN_FREED_CHUNK_SIZE
 static void *search_free_chunk_in_zone(
     zone_metadata_t *zone,
     const size_t size
@@ -74,34 +104,37 @@ static void *search_free_chunk_in_zone(
         if (raw_it_size < min_size)
             continue;
 
-        size_t remaining_size = raw_it_size - min_size;
-
         chunk_header_t *alloc_chunk = (void*) it;
         alloc_chunk->size = min_size;
 
-        freed_header_t *remainder;
-        // if the remaining size cannot fit a freed chunk's metadata
-        // then we don't split
+        size_t remaining_size = raw_it_size - min_size;
         if (remaining_size < MIN_FREED_CHUNK_SIZE) {
-            alloc_chunk->size = raw_it_size;
-            remainder = NULL;
-        } else {
-            remainder = (void*) it + UNMASK(alloc_chunk->size);
-            remainder->next = it->next;
-            remainder->size = remaining_size;
+            // update the double linked list
+            if (prev_chunk) prev_chunk->next = it->next;
+            if (it->next) it->next->prev = prev_chunk;
+            if (zone->begin == it) zone->begin = it->next;
 
-            // update the footer of the freed chunk
+            // update the size of the allocated chunk
+            alloc_chunk->size = raw_it_size;
+        } else {
+            // create a freed chunk in memory
+            freed_header_t *remainder = (void*) it + alloc_chunk->size;
+            remainder->size = remaining_size;
+            remainder->prev = prev_chunk;
+            remainder->next = it->next;
+
+            // write the footer
             size_t footer_offset = remainder->size - sizeof(freed_footer_t);
-            chunk_header_t *footer = (void*) remainder + footer_offset;
-            footer->size = remainder->size;
+            freed_footer_t *footer = (void*) remainder + footer_offset;
+            footer->prev_size = remainder->size;
+
+            // update the double linked list
+            if (prev_chunk) prev_chunk->next = remainder;
+            if (it->next) it->next->prev = remainder;
+            if (zone->begin == it) zone->begin = remainder;
         }
 
-        if (prev_chunk)
-            prev_chunk->next = remainder;
-        else
-            zone->begin = remainder;
-
-        return ((void*)alloc_chunk) + CHUNK_HEADER_SIZE;
+        return ((void*) alloc_chunk) + CHUNK_HEADER_SIZE;
     }
 
     return NULL;
@@ -148,16 +181,15 @@ static void* carve_from_top_chunk(zone_metadata_t *zone, size_t size) {
     if (next_top > (void*) zone + zone->size)
         return NULL; // Not enough space
 
-    chunk_header_t* chunk = (void*) zone->top;
-    const size_t inherited_flags = chunk->size & CHUNK_META_MASK;
+    chunk_header_t* alloc_chunk = (void*) zone->top;
+    const size_t inherited_flags = alloc_chunk->size & CHUNK_META_MASK;
 
-    // inherit the "Top Chunk" size without the headers
-    const size_t previous_size = UNMASK(zone->top->size);
-    zone->top = (void*) next_top; // Changing "Top Chunk" location
-    zone->top->size = previous_size - size;
+    const size_t previous_zone_size = UNMASK(zone->top->size);
+    zone->top = (void*) next_top;
+    zone->top->size = previous_zone_size - size;
 
-    chunk->size = size | inherited_flags;
-    return (void*) chunk + CHUNK_HEADER_SIZE;
+    alloc_chunk->size = size | inherited_flags;
+    return (void*) alloc_chunk + CHUNK_HEADER_SIZE;
 }
 
 // Return NULL if not found any block.
@@ -183,8 +215,9 @@ void *malloc(size_t size) {
 
     struct zone_info_s infos = _get_zone_infos(size);
 
+    void *chunk = NULL;
     if (infos.type != LARGE) {
-        void* chunk = search_chunk(infos, size);
+        chunk = search_chunk(infos, size);
         if (chunk)
             return chunk;
     }
@@ -194,5 +227,6 @@ void *malloc(size_t size) {
         return NULL;
     zone_push_last(infos.zone, new_zone);
 
-    return carve_from_top_chunk(new_zone, size);
+    chunk = carve_from_top_chunk(new_zone, size);
+    return chunk;
 }

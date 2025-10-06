@@ -96,5 +96,8 @@ struct zone_info_s _get_zone_infos(const size_t size);
 void	free(void *ptr);
 void	*malloc(size_t size);
 void	*realloc(void *ptr, size_t size);
+void    *calloc(size_t nmemb, size_t size);
+
+void    show_alloc_mem();
 
 #endif
