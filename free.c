@@ -81,8 +81,8 @@ void free(void* ptr) {
         UNMASK(meta->size) - CHUNK_HEADER_SIZE // payload size
     );
     zone_metadata_t *zone = get_subzone(*inf.zone, ptr);
-    if (!zone)
-        return;
+    // if (!zone)
+    //     return;
 
     // COALESCE_NONE = adding free chunk to list
     // COALESCE_BACKWARD = updating the backward chunk already in free list
