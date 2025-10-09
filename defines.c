@@ -2,6 +2,7 @@
 #include <unistd.h>
 
 allocator_t g_allocator = { NULL, NULL, NULL };
+pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Global defines */
 const unsigned char MEM_ALIGNMENT = _Alignof(max_align_t) <= 8 ?

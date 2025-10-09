@@ -70,6 +70,7 @@ static void _remove_chunk_from_freelist(
 }
 
 void free(void* ptr) {
+    return;
     if (ptr == NULL)
         return;
 

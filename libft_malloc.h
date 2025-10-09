@@ -5,6 +5,7 @@
 
 # include <stddef.h>
 # include <stdlib.h>
+# include <pthread.h>
 
 # define TINY_ZONE_TRESHOLD 128
 # define SMALL_ZONE_TRESHOLD 2048
@@ -79,6 +80,7 @@ typedef struct allocator_s {
 }	allocator_t;
 
 extern allocator_t g_allocator;
+extern pthread_mutex_t g_mutex;
 
 /* utils function */
 
