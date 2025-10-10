@@ -1,14 +1,72 @@
 #include "libft_malloc.h"
 #include <stddef.h>
 #include <strings.h>
+#include <stdalign.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
-#define max(a, b) \
+#define MAX(a, b) \
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
      _a > _b ? _a : _b; })
 
-static void *_handle_large_alloc(size_t size) {
+/* Allocate new zone and return its address.
+* Return NULL in case of error and set errno.
+*/
+static zone_metadata_t* _allocate_zone(
+    size_t size,
+    const enum ZONE_TYPE type
+) {
+    switch (type) {
+        case TINY:
+            size = TINY_ZONE_ALLOC_SIZE;
+            break;
+        case SMALL:
+            size = SMALL_ZONE_ALLOC_SIZE;
+            break;
+        case LARGE:
+            size += CHUNK_HEADER_SIZE;
+            break;
+        default:
+            break;
+    }
 
+    size += ALIGNED_ZONE_METADATA;
+
+    // Align the space required to the page alignment.
+    size = ALIGN_TO(size, sysconf(_SC_PAGESIZE));
+
+    zone_metadata_t *zone = mmap(
+        NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0
+    );
+    if (zone == MAP_FAILED)
+        return NULL;
+
+    zone->size = size;
+    zone->next = NULL;
+    zone->begin = NULL;
+
+    zone->top = (void*) zone + ALIGNED_ZONE_METADATA;
+    zone->top->size = (void*) zone + zone->size - (void*) zone->top;
+
+    return zone;
+}
+
+static void _zone_push_back(zone_metadata_t **origin, zone_metadata_t *node) {
+    if (*origin == NULL) {
+        *origin = node;
+    } else {
+        zone_metadata_t *it = *origin;
+        while (it->next != NULL) it = it->next;
+        it->next = node;
+    }
+}
+
+static void *_handle_large_alloc(zone_metadata_t **zone, size_t size) {
+    zone_metadata_t *new_zone = _allocate_zone(size, LARGE);
+    _zone_push_back(zone, new_zone);
+    pthread_mutex_unlock(&g_mutex);
+    return (void*) new_zone + ALIGNED_ZONE_METADATA + CHUNK_HEADER_SIZE;
 }
 
 // `size` must be the aligned.
@@ -56,29 +114,45 @@ static void *_search_through_free_list(
 }
 
 // `size` must be the aligned.
+// If available, move the top chunk forward at the end of the user allocated
+// chunk.
 static void *_carve_space(zone_metadata_t *zone, size_t size) {
+    if (
+        (void*) zone->top + CHUNK_HEADER_SIZE + size >
+        (void*) zone + zone->size
+    ) {
+        return NULL; // no space available in zone
+    }
 
+    // create new user space and set metadata
+    chunk_header_t *allocated = zone->top;
+    allocated->size = size;
+
+    zone->top = (void*) zone->top + size;
+
+    return (void*) allocated + CHUNK_HEADER_SIZE;
 }
 
+// The `MAX` macro make sure that whatever the payload/size requested
+// by the user is, it will always at least be MIN_FREED_CHUNK_SIZE
+// to fit the freed chunk metadata once freed, therefore its range is:
+// [MIN_FREED_CHUNK_SIZE, ALIGNED_PAYLOAD + ALIGNED_METADATA]
+#define ALIGNED_MIN_CHUNK_SIZE(size) MAX(ALIGN(size) + CHUNK_HEADER_SIZE, \
+    MIN_FREED_CHUNK_SIZE)
 
+// Return a user space address, else `NULL` mean that there is no space left.
 static void *_search_free_chunk(zone_metadata_t *zone, size_t size) {
-    // The `max` macro make sure that whatever the payload/size requested
-    // by the user is, it will always at least be MIN_FREED_CHUNK_SIZE
-    // to fit the freed chunk metadata once freed, therefore its range is:
-    // [MIN_FREED_CHUNK_SIZE, ALIGNED_PAYLOAD + ALIGNED_METADATA]
-    const size_t min_size = max(
-        ALIGN(size) + CHUNK_HEADER_SIZE, MIN_FREED_CHUNK_SIZE
-    );
+    const size_t min_size = ALIGNED_MIN_CHUNK_SIZE(size);
 
     void *chunk;
     zone_metadata_t *zone_it;
     for (zone_it = zone; zone_it != NULL; zone_it = zone_it->next) {
-        if (!zone_it->begin)
-            continue;
         chunk = _search_through_free_list(zone_it, min_size);
         if (chunk)
             return chunk;
         chunk = _carve_space(zone_it, min_size);
+        if (chunk)
+            return chunk;
     }
 
     return NULL;
@@ -92,11 +166,22 @@ void *malloc(size_t size) {
 
     struct zone_info_s inf = _get_zone_infos(size);
     if (inf.type == LARGE)
-        return _handle_large_alloc(size);
+        return _handle_large_alloc(inf.zone, size);
 
     void *chunk = _search_free_chunk(*inf.zone, size);
-    if (chunk)
-        return pthread_mutex_unlock(&g_mutex), chunk;
+    if (chunk) {
+        pthread_mutex_unlock(&g_mutex);
+        return chunk;
+    }
 
-    return NULL;
+    zone_metadata_t *new_zone = _allocate_zone(size, inf.type);
+    if (!new_zone) {
+        pthread_mutex_unlock(&g_mutex);
+        return NULL;
+    }
+
+    _zone_push_back(inf.zone, new_zone);
+    chunk = _carve_space(new_zone, ALIGNED_MIN_CHUNK_SIZE(size));
+    pthread_mutex_unlock(&g_mutex);
+    return chunk;
 }
