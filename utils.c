@@ -14,6 +14,28 @@ struct zone_info_s  _get_zone_infos(const size_t payload_size) {
     return (struct zone_info_s){ .zone = zone, .type = zone_type };
 }
 
+void _remove_from_free_list(freed_header_t **origin, freed_header_t *node) {
+    if (node->prev) {
+        node->prev->next = node->next;
+    } else {
+        *origin = node->next;
+    }
+    if (node->next) {
+        node->next->prev = node->prev;
+    }
+}
+
+void _free_list_push_front(zone_metadata_t *zone, freed_header_t *node) {
+    node->next = zone->begin;
+    node->prev = NULL;
+
+    if (zone->begin) {
+        zone->begin->prev = node;
+    }
+
+    zone->begin = node;
+}
+
 void    show_alloc_mem() {
 
 }
