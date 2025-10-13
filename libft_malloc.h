@@ -89,9 +89,9 @@ struct zone_info_s {
 	enum ZONE_TYPE type;
 };
 
-struct zone_info_s _get_zone_infos(const size_t size);
-void _remove_from_free_list(freed_header_t **origin, freed_header_t *node);
-void _free_list_push_front(zone_metadata_t *zone, freed_header_t *node);
+struct zone_info_s get_zone_infos(const size_t size);
+void remove_from_free_list(freed_header_t **origin, freed_header_t *node);
+void free_list_push_front(zone_metadata_t *zone, freed_header_t *node);
 
 #define UNMASK(size) (size & ~CHUNK_META_MASK)
 

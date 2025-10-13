@@ -83,7 +83,7 @@ static void *_search_through_free_list(
         // don't inherit the flags because two freed chunk would never be next
         // to each other in memory
         it->size = raw_it_size;
-        _remove_from_free_list(&zone->begin, it);
+        remove_from_free_list(&zone->begin, it);
 
         // check if there is remaining space to split the freed chunk
         size_t remaining_size = raw_it_size - size;
@@ -105,7 +105,7 @@ static void *_search_through_free_list(
             freed_footer_t *footer = (void*) new_chunk + footer_offset;
             footer->prev_size = new_chunk->size;
 
-            _free_list_push_front(zone, new_chunk);
+            free_list_push_front(zone, new_chunk);
         }
 
         return (void*) it + CHUNK_HEADER_SIZE;
@@ -164,7 +164,7 @@ void *malloc(size_t size) {
 
     pthread_mutex_lock(&g_mutex);
 
-    struct zone_info_s inf = _get_zone_infos(size);
+    struct zone_info_s inf = get_zone_infos(size);
     if (inf.type == LARGE)
         return _handle_large_alloc(inf.zone, size);
 
