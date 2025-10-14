@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <strings.h>
 #include <sys/mman.h>
+#include <stdlib.h>
 
 typedef enum {
     NONE,
@@ -50,6 +51,27 @@ void top_chunk_absorb(freed_header_t *chunk, zone_metadata_t *zone) {
     zone->top->size = old_size + raw_size;
 }
 
+void coalesce_both(freed_header_t *chunk, zone_metadata_t *zone) {
+    coalesce_forward(chunk, zone);
+    remove_from_free_list(zone, chunk);
+    coalesce_backward(chunk, zone);
+}
+
+void coalesce_bw_and_absorb(freed_header_t *chunk, zone_metadata_t *zone) {
+    freed_footer_t *prev_footer = (void*) chunk - sizeof(freed_footer_t);
+    freed_header_t *bw_chunk = (void*) chunk - prev_footer->prev_size;
+
+    coalesce_backward(chunk, zone);
+    top_chunk_absorb(bw_chunk, zone);
+    remove_from_free_list(zone, bw_chunk);
+}
+
+void null_function(freed_header_t *chunk, zone_metadata_t *zone) {
+    (void) chunk;
+    (void) zone;
+    exit(EXIT_FAILURE);
+}
+
 // COALESCE_NONE = adding free chunk to list
 // COALESCE_BACKWARD = updating the backward chunk already in free list
 // COALESCE_FORWARD = updating the free chunk inside the free list
@@ -62,10 +84,14 @@ void top_chunk_absorb(freed_header_t *chunk, zone_metadata_t *zone) {
 // COALESCE_BACKWARD & TOP_CHUNK_ABSORB = remove every references from free
 // list and update the position of the top chunk
 coalesce_strategy strategies[] = {
-    coalesce_none,
-    coalesce_forward,
-    coalesce_backward,
-    top_chunk_absorb
+    coalesce_none,          // 0b00000000
+    coalesce_forward,       // 0b00000001
+    coalesce_backward,      // 0b00000010
+    coalesce_both,          // 0b00000011
+    top_chunk_absorb,       // 0b00000100
+    null_function,          // 0b00000101
+    coalesce_bw_and_absorb, // 0b00000110
+    null_function           // 0b00000111
 };
 
 zone_metadata_t *_get_subzone(zone_metadata_t *zone, void *ptr) {
@@ -133,12 +159,7 @@ void free(void *ptr) {
         actions |= TOP_CHUNK_ABSORB;
     }
 
-    if (actions == NONE) coalesce_none(data, subzone);
-    if (actions & COALESCE_FORWARD) coalesce_forward(data, subzone);
-    if (actions & COALESCE_BACKWARD) coalesce_backward(data, subzone);
-    if (actions & TOP_CHUNK_ABSORB) top_chunk_absorb(data, subzone);
-
-    // strategies[actions](data, subzone);
+    strategies[actions](data, subzone);
 
     pthread_mutex_unlock(&g_mutex);
 }
