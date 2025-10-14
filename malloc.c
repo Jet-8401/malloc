@@ -1,5 +1,6 @@
 #include "libft_malloc.h"
 #include <stddef.h>
+#include <stdlib.h>
 #include <strings.h>
 #include <stdalign.h>
 #include <sys/mman.h>
@@ -39,8 +40,10 @@ static zone_metadata_t* _allocate_zone(
     zone_metadata_t *zone = mmap(
         NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0
     );
-    if (zone == MAP_FAILED)
+    if (zone == MAP_FAILED) {
+        exit(EXIT_FAILURE);
         return NULL;
+    }
 
     zone->size = size;
     zone->next = NULL;
@@ -80,34 +83,28 @@ static void *_search_through_free_list(
         if (raw_it_size < size)
             continue;
 
-        // don't inherit the flags because two freed chunk would never be next
-        // to each other in memory
-        it->size = raw_it_size;
-        remove_from_free_list(&zone->begin, it);
+        remove_from_free_list(zone, it);
 
         // check if there is remaining space to split the freed chunk
         size_t remaining_size = raw_it_size - size;
         if (remaining_size < MIN_FREED_CHUNK_SIZE) {
             // update the next chunk in memory to remove IS_PREV_FREE flag
-            chunk_header_t *fw_chunk = (void*) it + raw_it_size;
+            chunk_header_t *fw_chunk = ADVANCE_CHUNK(it);
             fw_chunk->size &= ~(size_t)IS_PREV_FREE;
         } else {
             // update the size of the found chunk
             it->size = size;
 
             // create new freed chunk inside the remaining space area
-            freed_header_t *new_chunk = (void*) it + size;
-            bzero(new_chunk, sizeof(freed_header_t)); // reset metadata
+            freed_header_t *new_chunk = ADVANCE_CHUNK(it);
+            bzero(new_chunk, remaining_size); // reset metadata
             new_chunk->size = remaining_size;
 
             // create footer for backward coalescing
-            size_t footer_offset = new_chunk->size - sizeof(freed_footer_t);
-            freed_footer_t *footer = (void*) new_chunk + footer_offset;
-            footer->prev_size = new_chunk->size;
+            WRITE_FOOTER(new_chunk);
 
             free_list_push_front(zone, new_chunk);
         }
-
         return (void*) it + CHUNK_HEADER_SIZE;
     }
     return NULL;
@@ -164,7 +161,7 @@ void *malloc(size_t size) {
 
     pthread_mutex_lock(&g_mutex);
 
-    struct zone_info_s inf = get_zone_infos(size);
+    const struct zone_info_s inf = get_zone_infos(size);
     if (inf.type == LARGE)
         return _handle_large_alloc(inf.zone, size);
 

@@ -24,7 +24,7 @@ extern const unsigned char MEM_ALIGNMENT; // [8, sysconf(_SC_PAGESIZE))
 typedef enum {
     IS_PREV_FREE = 1 << 0,
     IS_ANCHOR = 1 << 1
-}   chunk_metadata_t;
+}   chunk_metadata_e;
 
 # define CHUNK_META_MASK 0x7
 
@@ -90,10 +90,17 @@ struct zone_info_s {
 };
 
 struct zone_info_s get_zone_infos(const size_t size);
-void remove_from_free_list(freed_header_t **origin, freed_header_t *node);
+void remove_from_free_list(zone_metadata_t *zone, freed_header_t *node);
 void free_list_push_front(zone_metadata_t *zone, freed_header_t *node);
 
-#define UNMASK(size) (size & ~CHUNK_META_MASK)
+# define UNMASK(size) (size & ~CHUNK_META_MASK)
+
+# define ADVANCE_CHUNK(chunk) (void*) chunk + UNMASK(chunk->size)
+
+# define WRITE_FOOTER(chunk) ({ \
+    freed_footer_t *footer = ADVANCE_CHUNK(chunk) - sizeof(freed_footer_t); \
+    footer->prev_size = UNMASK(chunk->size); \
+    })
 
 /* functions prototypes */
 

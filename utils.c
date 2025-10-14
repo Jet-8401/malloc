@@ -1,6 +1,6 @@
 #include "libft_malloc.h"
 
-struct zone_info_s  get_zone_infos(const size_t payload_size) {
+struct zone_info_s get_zone_infos(const size_t payload_size) {
     zone_metadata_t **zone = &g_allocator.large_zone;
     enum ZONE_TYPE zone_type = LARGE;
     if (payload_size <= TINY_ZONE_TRESHOLD) {
@@ -14,11 +14,11 @@ struct zone_info_s  get_zone_infos(const size_t payload_size) {
     return (struct zone_info_s){ .zone = zone, .type = zone_type };
 }
 
-void remove_from_free_list(freed_header_t **origin, freed_header_t *node) {
+void remove_from_free_list(zone_metadata_t *zone, freed_header_t *node) {
     if (node->prev) {
         node->prev->next = node->next;
     } else {
-        *origin = node->next;
+        zone->begin = node->next;
     }
     if (node->next) {
         node->next->prev = node->prev;
