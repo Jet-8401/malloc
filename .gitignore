@@ -5,3 +5,5 @@
 *.pch
 
 *.zed
+
+tests/

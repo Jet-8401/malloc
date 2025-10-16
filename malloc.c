@@ -91,6 +91,8 @@ static void *_search_through_free_list(
             // update the next chunk in memory to remove IS_PREV_FREE flag
             chunk_header_t *fw_chunk = ADVANCE_CHUNK(it);
             fw_chunk->size &= ~(size_t)IS_PREV_FREE;
+            if ((void*) fw_chunk > (void*) zone + zone->size)
+                exit(1);
         } else {
             // update the size of the found chunk
             it->size = size;
@@ -125,7 +127,9 @@ static void *_carve_space(zone_metadata_t *zone, size_t size) {
     chunk_header_t *allocated = zone->top;
     allocated->size = size;
 
+    size_t old_size = zone->top->size;
     zone->top = (void*) zone->top + size;
+    zone->top->size = old_size - size;
 
     return (void*) allocated + CHUNK_HEADER_SIZE;
 }

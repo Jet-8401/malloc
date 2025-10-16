@@ -26,6 +26,8 @@ void remove_from_free_list(zone_metadata_t *zone, freed_header_t *node) {
 }
 
 void free_list_push_front(zone_metadata_t *zone, freed_header_t *node) {
+    if (node == (void*) 0x30 || zone->begin == (void*) 0x30)
+        exit(EXIT_FAILURE);
     node->next = zone->begin;
     node->prev = NULL;
 

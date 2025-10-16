@@ -97,6 +97,9 @@ void free_list_push_front(zone_metadata_t *zone, freed_header_t *node);
 
 # define ADVANCE_CHUNK(chunk) (void*) chunk + UNMASK(chunk->size)
 
+# define BACK_CHUNK(chunk) (void*) chunk - \
+    ((freed_footer_t*) ((void*) chunk - sizeof(freed_footer_t)))->prev_size;
+
 # define WRITE_FOOTER(chunk) ({ \
     freed_footer_t *footer = ADVANCE_CHUNK(chunk) - sizeof(freed_footer_t); \
     footer->prev_size = UNMASK(chunk->size); \

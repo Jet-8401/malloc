@@ -26,7 +26,6 @@ void coalesce_none(freed_header_t *chunk, zone_metadata_t *zone) {
 void coalesce_forward(freed_header_t *chunk, zone_metadata_t *zone) {
     freed_header_t *fw_chunk = ADVANCE_CHUNK(chunk);
     remove_from_free_list(zone, fw_chunk);
-
     chunk->size += UNMASK(fw_chunk->size);
     WRITE_FOOTER(chunk);
 
@@ -36,34 +35,31 @@ void coalesce_forward(freed_header_t *chunk, zone_metadata_t *zone) {
 void coalesce_backward(freed_header_t *chunk, zone_metadata_t *zone) {
     (void) zone;
 
-    freed_footer_t *prev_footer = (void*) chunk - sizeof(freed_footer_t);
-    freed_header_t *bw_chunk = (void*) chunk - prev_footer->prev_size;
-
+    freed_header_t *bw_chunk = BACK_CHUNK(chunk);
     bw_chunk->size += UNMASK(chunk->size);
     WRITE_FOOTER(bw_chunk);
 }
 
 void top_chunk_absorb(freed_header_t *chunk, zone_metadata_t *zone) {
-    size_t raw_size = UNMASK(chunk->size);
-
-    size_t old_size = zone->top->size;
+    size_t raw_size = (void*) zone->top - (void*) chunk;
     zone->top = (void*) zone->top - raw_size;
-    zone->top->size = old_size + raw_size;
+    zone->top->size = (void*) zone + zone->size - (void*) zone->top;
 }
 
 void coalesce_both(freed_header_t *chunk, zone_metadata_t *zone) {
-    coalesce_forward(chunk, zone);
-    remove_from_free_list(zone, chunk);
-    coalesce_backward(chunk, zone);
+    freed_header_t *fw_chunk = ADVANCE_CHUNK(chunk);
+    remove_from_free_list(zone, fw_chunk);
+
+    freed_header_t *bw_chunk = BACK_CHUNK(chunk);
+    bw_chunk->size += UNMASK(fw_chunk->size) + UNMASK(chunk->size);
+    WRITE_FOOTER(bw_chunk);
 }
 
 void coalesce_bw_and_absorb(freed_header_t *chunk, zone_metadata_t *zone) {
-    freed_footer_t *prev_footer = (void*) chunk - sizeof(freed_footer_t);
-    freed_header_t *bw_chunk = (void*) chunk - prev_footer->prev_size;
-
-    coalesce_backward(chunk, zone);
-    top_chunk_absorb(bw_chunk, zone);
+    freed_header_t *bw_chunk = BACK_CHUNK(chunk);
     remove_from_free_list(zone, bw_chunk);
+
+    top_chunk_absorb(bw_chunk, zone);
 }
 
 void null_function(freed_header_t *chunk, zone_metadata_t *zone) {
@@ -134,11 +130,16 @@ void free(void *ptr) {
 
     pthread_mutex_lock(&g_mutex);
 
+    // get pointer metadata and setup metadata to NULL to avoid corruption
     freed_header_t *data = (void*) ptr - CHUNK_HEADER_SIZE;
+    data->next = NULL;
+    data->prev = NULL;
+
     const size_t payload_size = UNMASK(data->size) - CHUNK_HEADER_SIZE;
     const struct zone_info_s inf = get_zone_infos(payload_size);
     if (inf.type == LARGE)
         return _handle_large_free(inf.zone, data);
+    // get the specific zone where the pointer belong
     zone_metadata_t *subzone = _get_subzone(*inf.zone, data);
     if (!subzone) {
         pthread_mutex_unlock(&g_mutex);
@@ -146,18 +147,26 @@ void free(void *ptr) {
     }
     uint8_t actions = NONE;
 
-    if (data->size & IS_PREV_FREE) {
-        actions |= COALESCE_BACKWARD;
-    }
+    // if (data->size & IS_PREV_FREE) {
+    //     actions |= COALESCE_BACKWARD;
+    // }
 
-    chunk_header_t *fw_chunk = ADVANCE_CHUNK(data);
-    if (fw_chunk != subzone->top) {
-        fw_chunk = ADVANCE_CHUNK(fw_chunk);
-        if (fw_chunk->size & IS_PREV_FREE)
-            actions |= COALESCE_FORWARD;
-    } else {
-        actions |= TOP_CHUNK_ABSORB;
-    }
+    // // [chunk (freed)][fw_chunk (?)]
+    // chunk_header_t *fw_chunk = ADVANCE_CHUNK(data);
+    // // if the chunk forward is the top chunk it will absorb the current chunk
+    // // else we need to advance again to check the status of the second chunk
+    // if (fw_chunk->size & IS_PREV_FREE)
+    //     exit(EXIT_FAILURE);
+    // if (fw_chunk != subzone->top) {
+    //     fw_chunk = ADVANCE_CHUNK(fw_chunk);
+    //     // [chunk (freed)][chunk (?)][fw_chunk (?)]
+    //     if (fw_chunk->size & IS_PREV_FREE) {
+    //         // [chunk (freed)][chunk (freed)][fw_chunk (?)]
+    //         actions |= COALESCE_FORWARD;
+    //     }
+    // } else {
+    //     actions |= TOP_CHUNK_ABSORB;
+    // }
 
     strategies[actions](data, subzone);
 
