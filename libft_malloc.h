@@ -6,6 +6,7 @@
 # include <stddef.h>
 # include <stdlib.h>
 # include <pthread.h>
+# include <stdint.h>
 
 # define TINY_ZONE_TRESHOLD 128
 # define SMALL_ZONE_TRESHOLD 2048
@@ -13,7 +14,8 @@
 // Minimum of 8 bytes alignment else respect system requirements, that value is
 // set that way to utilize the three last bit of the `size` metadata
 // inside chunks for flags.
-extern const unsigned char MEM_ALIGNMENT; // [8, sysconf(_SC_PAGESIZE))
+static const uint8_t MEM_ALIGNMENT = _Alignof(max_align_t) <= 8 ?
+    8 : _Alignof(max_align_t);
 
 // ALIGN macro will return the size aligned to MEM_ALIGNMENT constant
 # define ALIGN(size) ((size + MEM_ALIGNMENT - 1) & ~(MEM_ALIGNMENT - 1))
@@ -22,8 +24,8 @@ extern const unsigned char MEM_ALIGNMENT; // [8, sysconf(_SC_PAGESIZE))
 /* chunks metadata */
 
 # define IS_PREV_FREE ((size_t) 1 << 1)
-
 # define CHUNK_META_MASK ((size_t) 0x7)
+# define UNMASK(size) (size & ~CHUNK_META_MASK)
 
 // Data chunk:
 //  - allocated = [size & flags][payload][prev_size]
@@ -44,9 +46,6 @@ typedef struct freed_footer_s {
     size_t prev_size;   // same as size inside chunk_header_t
 }   freed_footer_t;
 
-extern const unsigned char CHUNK_HEADER_SIZE;
-extern const unsigned char MIN_FREED_CHUNK_SIZE;
-
 /* zones metadata */
 
 enum ZONE_TYPE { TINY, SMALL, LARGE };
@@ -61,12 +60,15 @@ typedef struct zone_metadata_s {
 	chunk_header_t *top;
 }	zone_metadata_t;
 
-extern const unsigned char ALIGNED_ZONE_METADATA;
-// `*_ALLOC_SIZE` is the raw size of the minumum to allocate to fit at least 100
-// allocations inside a zone.
-// They always must be equal or greater than MIN_FREED_CHUNK_SIZE !
-extern const size_t TINY_ZONE_ALLOC_SIZE;
-extern const size_t SMALL_ZONE_ALLOC_SIZE;
+// typedef struct large_zone_metadata_s {
+//     size_t size;
+//     struct large_zone_metadata_s *next;
+// }   large_zone_meta_t;
+
+// typedef union zone_u {
+//     zone_metadata_t std_zone;
+//     large_zone_meta_t large_zone;
+// }   zone_t;
 
 /* global allocator structure */
 
@@ -74,13 +76,28 @@ typedef struct allocator_s {
 	zone_metadata_t *tiny_zone;
 	zone_metadata_t *small_zone;
 	zone_metadata_t *large_zone;
-
-	pthread_mutex_t tiny_lock;
-	pthread_mutex_t small_lock;
-	pthread_mutex_t large_lock;
 }	allocator_t;
 
-extern allocator_t g_allocator;
+typedef struct malloc_context_s {
+    allocator_t allocator;
+
+    pthread_mutex_t tiny_lock;
+	pthread_mutex_t small_lock;
+	pthread_mutex_t large_lock;
+
+	const uint8_t ALIGNED_ZONE_METADATA;
+	// const uint8_t ALIGNED_LARGE_ZONE_META;
+	const uint8_t HEADER_SIZE;
+	const uint8_t MIN_CHUNK_SIZE;
+
+	// `*_ALLOC_SIZE` is the raw size of the minumum to allocate to fit at least
+	// 100 allocations inside a zone.
+    // They always must be equal or greater than MIN_FREED_CHUNK_SIZE !
+	const size_t TINY_ZONE_ALLOC_SIZE;
+	const size_t SMALL_ZONE_ALLOC_SIZE;
+}   mctx_t;
+
+extern mctx_t mctx;
 
 /* utils function */
 
@@ -91,8 +108,7 @@ struct zone_info_s {
 };
 
 struct zone_info_s get_zone_infos(const size_t size);
-
-# define UNMASK(size) (size & ~CHUNK_META_MASK)
+void zone_push_back(zone_metadata_t **head, zone_metadata_t *zone);
 
 static inline chunk_header_t *advance_chunk(chunk_header_t *chunk) {
     return (chunk_header_t*) ((char*) chunk + UNMASK(chunk->size));
