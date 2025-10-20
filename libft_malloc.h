@@ -21,12 +21,9 @@ extern const unsigned char MEM_ALIGNMENT; // [8, sysconf(_SC_PAGESIZE))
 
 /* chunks metadata */
 
-typedef enum {
-    IS_PREV_FREE = 1 << 0,
-    IS_ANCHOR = 1 << 1
-}   chunk_metadata_e;
+# define IS_PREV_FREE ((size_t) 1 << 1)
 
-# define CHUNK_META_MASK 0x7
+# define CHUNK_META_MASK ((size_t) 0x7)
 
 // Data chunk:
 //  - allocated = [size & flags][payload][prev_size]
@@ -77,33 +74,44 @@ typedef struct allocator_s {
 	zone_metadata_t *tiny_zone;
 	zone_metadata_t *small_zone;
 	zone_metadata_t *large_zone;
+
+	pthread_mutex_t tiny_lock;
+	pthread_mutex_t small_lock;
+	pthread_mutex_t large_lock;
 }	allocator_t;
 
 extern allocator_t g_allocator;
-extern pthread_mutex_t g_mutex;
 
 /* utils function */
 
 struct zone_info_s {
 	zone_metadata_t **zone;
 	enum ZONE_TYPE type;
+	pthread_mutex_t *lock;
 };
 
 struct zone_info_s get_zone_infos(const size_t size);
-void remove_from_free_list(zone_metadata_t *zone, freed_header_t *node);
-void free_list_push_front(zone_metadata_t *zone, freed_header_t *node);
 
 # define UNMASK(size) (size & ~CHUNK_META_MASK)
 
-# define ADVANCE_CHUNK(chunk) (void*) chunk + UNMASK(chunk->size)
+static inline chunk_header_t *advance_chunk(chunk_header_t *chunk) {
+    return (chunk_header_t*) ((char*) chunk + UNMASK(chunk->size));
+}
 
-# define BACK_CHUNK(chunk) (void*) chunk - \
-    ((freed_footer_t*) ((void*) chunk - sizeof(freed_footer_t)))->prev_size;
+static inline freed_header_t *get_prev_chunk(chunk_header_t *chunk) {
+    if (!(chunk->size & IS_PREV_FREE))
+        return NULL;
+    freed_footer_t *footer = (freed_footer_t*) ((char*) chunk -
+        sizeof(freed_footer_t));
+    return (freed_header_t*) ((char*) chunk - footer->prev_size);
+}
 
-# define WRITE_FOOTER(chunk) ({ \
-    freed_footer_t *footer = ADVANCE_CHUNK(chunk) - sizeof(freed_footer_t); \
-    footer->prev_size = UNMASK(chunk->size); \
-    })
+static inline void write_footer(freed_header_t *chunk) {
+    size_t raw_size = UNMASK(chunk->size);
+    freed_footer_t *footer = (freed_footer_t*) ((char*) chunk + raw_size -
+        sizeof(freed_footer_t));
+    footer->prev_size = raw_size;
+}
 
 /* functions prototypes */
 
