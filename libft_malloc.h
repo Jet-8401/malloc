@@ -26,6 +26,7 @@ static const uint8_t MEM_ALIGNMENT = _Alignof(max_align_t) <= 8 ?
 # define IS_PREV_FREE ((size_t) 1 << 1)
 # define CHUNK_META_MASK ((size_t) 0x7)
 # define UNMASK(size) (size & ~CHUNK_META_MASK)
+# define GET_RAW_SIZE(chunk) UNMASK(chunk->size)
 
 // Data chunk:
 //  - allocated = [size & flags][payload][prev_size]
@@ -56,6 +57,7 @@ enum ZONE_TYPE { TINY, SMALL, LARGE };
 typedef struct zone_metadata_s {
 	size_t size;
 	struct zone_metadata_s *next;
+	struct zone_metadata_s *prev;
 	freed_header_t *begin;
 	chunk_header_t *top;
 }	zone_metadata_t;

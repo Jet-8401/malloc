@@ -22,6 +22,7 @@ struct zone_info_s get_zone_infos(const size_t payload_size) {
 
 void zone_push_back(zone_metadata_t **head, zone_metadata_t *zone) {
     zone->next = NULL;
+    zone->prev = NULL;
 
     if (*head == NULL) {
         *head = zone;
@@ -31,5 +32,6 @@ void zone_push_back(zone_metadata_t **head, zone_metadata_t *zone) {
             current = current->next;
         }
         current->next = zone;
+        zone->prev = current;
     }
 }

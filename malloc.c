@@ -42,14 +42,16 @@ static void *_handle_large_alloc(size_t chunk_size) {
 
     zone_metadata_t *allocated_zone = alloc(size);
     zone_push_back(&mctx.allocator.large_zone, allocated_zone);
-
     allocated_zone->size = size;
-    return (uint8_t*) allocated_zone + mctx.ALIGNED_ZONE_METADATA +
-        mctx.HEADER_SIZE;
+
+    chunk_header_t *chunk = (chunk_header_t*)
+        ((uint8_t*) allocated_zone + mctx.ALIGNED_ZONE_METADATA);
+    chunk->size = size - mctx.ALIGNED_ZONE_METADATA;
+
+    return (uint8_t*) chunk + mctx.HEADER_SIZE;
 }
 
 static void remove_from_list(freed_header_t **origin, freed_header_t *node) {
-
     if (node->prev) {
         node->prev->next = node->next;
     } else if (node == *origin) {
@@ -156,8 +158,10 @@ static void *_handle_alloc(struct zone_info_s info, size_t chunk_size) {
 
     // link the newly allocated zone
     if (last_zone != NULL) {
+        allocated_zone->prev = last_zone;
         last_zone->next = allocated_zone;
     } else {
+        allocated_zone->prev = NULL;
         *info.zone = allocated_zone;
     }
 
