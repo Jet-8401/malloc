@@ -32,6 +32,7 @@ static void _handle_free(chunk_header_t *chunk) {
 }
 
 void free(void *ptr) {
+    return;
     chunk_header_t *meta = (void*) ((uint8_t*) ptr - mctx.HEADER_SIZE);
 
     const struct zone_info_s info = get_zone_infos(GET_RAW_SIZE(meta));

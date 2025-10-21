@@ -37,10 +37,27 @@ static int _compute_chunk_size(size_t user_size, size_t *chunk_size) {
 }
 
 static void *_handle_large_alloc(size_t chunk_size) {
-    const size_t size = ALIGN_TO(chunk_size, sysconf(_SC_PAGESIZE)) +
-        mctx.ALIGNED_ZONE_METADATA;
+    const size_t page_size = sysconf(_SC_PAGESIZE);
 
+    // check if ALIGN_TO would cause an overflow
+    if (chunk_size > SIZE_MAX - page_size + 1) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    const size_t aligned = ALIGN_TO(chunk_size, page_size);
+
+    // check if adding metadata would overflow
+    if (aligned > SIZE_MAX - mctx.ALIGNED_ZONE_METADATA) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    const size_t size = aligned + mctx.ALIGNED_ZONE_METADATA;
     zone_metadata_t *allocated_zone = alloc(size);
+    if (allocated_zone == MAP_FAILED)
+        return NULL;
+
     zone_push_back(&mctx.allocator.large_zone, allocated_zone);
     allocated_zone->size = size;
 
@@ -86,23 +103,32 @@ static void *_search_free_list(zone_metadata_t *zone, size_t chunk_size) {
 // Try to carve space from the top chunk by moving it by chunk_size.
 // Return NULL if no space left.
 static void *_carve_space(zone_metadata_t *zone, size_t chunk_size) {
-    // check if we have at least HEADER_SIZE left for the top metadata
-    if (zone->top->size - chunk_size < mctx.HEADER_SIZE)
+    // check if there is space available making sure the new chunk will not
+    // overflow the current top chunk's metadata
+    // note: both chunk size and top size are unsigned, make sure no overflow
+    // can happend
+    if (zone->top->size <= chunk_size ||
+        zone->top->size - chunk_size < mctx.HEADER_SIZE)
         return NULL;
 
-    chunk_header_t *allocated_chunk = zone->top;
-    allocated_chunk->size = chunk_size;
+    // save the top address
+    void *prev_top = zone->top;
 
+    // update the top chunk
     size_t new_size = zone->top->size - chunk_size;
     zone->top = (chunk_header_t*) ((uint8_t*) zone->top + chunk_size);
     zone->top->size = new_size;
+
+    // restore the previous top address to the current allocated block
+    chunk_header_t *allocated_chunk = prev_top;
+    allocated_chunk->size = chunk_size;
 
     return (uint8_t*) allocated_chunk + mctx.HEADER_SIZE;
 }
 
 // Return a pointer to a new zone freshly mmaped or NULL if an error occur.
 // Don't handle LARGE zone.
-static zone_metadata_t* _alloc_zone(enum ZONE_TYPE type) {
+static zone_metadata_t *_alloc_zone(enum ZONE_TYPE type) {
     size_t size = mctx.ALIGNED_ZONE_METADATA;
     switch (type) {
         case TINY:
@@ -134,6 +160,8 @@ static zone_metadata_t* _alloc_zone(enum ZONE_TYPE type) {
     return zone;
 }
 
+// Handle the allocation of chunks with a first-fit algorithm.
+// If no space is available the function will try to allocate more memory.
 static void *_handle_alloc(struct zone_info_s info, size_t chunk_size) {
     void *chunk = NULL;
     zone_metadata_t *zone_it, *last_zone = NULL;
@@ -151,7 +179,7 @@ static void *_handle_alloc(struct zone_info_s info, size_t chunk_size) {
             return chunk;
     }
 
-    // if we arrived to this point it mean that no space is left
+    // if we arrived to this point it means that no space is left
     zone_metadata_t *allocated_zone = _alloc_zone(info.type);
     if (!allocated_zone)
         return NULL;
@@ -169,7 +197,6 @@ static void *_handle_alloc(struct zone_info_s info, size_t chunk_size) {
 }
 
 void *malloc(size_t size) {
-    void *chunk;
     const struct zone_info_s info = get_zone_infos(size);
 
     size_t chunk_size;
@@ -180,6 +207,7 @@ void *malloc(size_t size) {
     // and don't touch the mutex anywhere else
     pthread_mutex_lock(info.lock);
 
+    void *chunk;
     if (info.type == LARGE) {
         chunk = _handle_large_alloc(chunk_size);
     } else {
