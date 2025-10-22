@@ -34,7 +34,10 @@ static const uint8_t MEM_ALIGNMENT = _Alignof(max_align_t) <= 8 ?
 // `size` is the full chunk size not just the user payload
 typedef struct chunk_header_s {
     size_t size;
+    uint32_t magic; // use do detect ownership of pointer inside free
 }   chunk_header_t;
+
+# define MAGIC_NUMBER 0xDEADBEEF
 
 // freed_* structures are metadata that apply only for freed chunks
 typedef struct freed_header_s {

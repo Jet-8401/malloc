@@ -26,7 +26,7 @@ static int _compute_chunk_size(size_t user_size, size_t *chunk_size) {
         return -1;
     }
 
-    // make chunk be at least MIN_FREED_CHUNK_SIZE to fit the freed chunk
+    // make chunk be at least MIN_CHUNK_SIZE to fit the freed chunk
     // metadata once freed
     size_t chunk = aligned + mctx.HEADER_SIZE;
     if (chunk < mctx.MIN_CHUNK_SIZE)
@@ -40,7 +40,7 @@ static void *_handle_large_alloc(size_t chunk_size) {
     const size_t page_size = sysconf(_SC_PAGESIZE);
 
     // check if ALIGN_TO would cause an overflow
-    if (chunk_size > SIZE_MAX - page_size + 1) {
+    if (__builtin_expect(chunk_size > SIZE_MAX - page_size + 1, 0)) {
         errno = ENOMEM;
         return NULL;
     }
@@ -48,7 +48,7 @@ static void *_handle_large_alloc(size_t chunk_size) {
     const size_t aligned = ALIGN_TO(chunk_size, page_size);
 
     // check if adding metadata would overflow
-    if (aligned > SIZE_MAX - mctx.ALIGNED_ZONE_METADATA) {
+    if (__builtin_expect(aligned > SIZE_MAX - mctx.ALIGNED_ZONE_METADATA, 0)) {
         errno = ENOMEM;
         return NULL;
     }
@@ -64,6 +64,7 @@ static void *_handle_large_alloc(size_t chunk_size) {
     chunk_header_t *chunk = (chunk_header_t*)
         ((uint8_t*) allocated_zone + mctx.ALIGNED_ZONE_METADATA);
     chunk->size = size - mctx.ALIGNED_ZONE_METADATA;
+    chunk->magic = MAGIC_NUMBER;
 
     return (uint8_t*) chunk + mctx.HEADER_SIZE;
 }
@@ -122,6 +123,7 @@ static void *_carve_space(zone_metadata_t *zone, size_t chunk_size) {
     // restore the previous top address to the current allocated block
     chunk_header_t *allocated_chunk = prev_top;
     allocated_chunk->size = chunk_size;
+    allocated_chunk->magic = MAGIC_NUMBER;
 
     return (uint8_t*) allocated_chunk + mctx.HEADER_SIZE;
 }

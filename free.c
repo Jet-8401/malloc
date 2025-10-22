@@ -22,8 +22,6 @@ static void _handle_large_free(zone_metadata_t **head, chunk_header_t *chunk) {
 
     if (munmap(zone, zone->size) == -1) {
         write(2, "unmap error\n", 12);
-    } else {
-        write(1, "yep\n", 4);
     }
 }
 
@@ -32,8 +30,13 @@ static void _handle_free(chunk_header_t *chunk) {
 }
 
 void free(void *ptr) {
-    return;
+    if (!ptr)
+        return;
+
     chunk_header_t *meta = (void*) ((uint8_t*) ptr - mctx.HEADER_SIZE);
+
+    if (meta->magic != MAGIC_NUMBER)
+        return;
 
     const struct zone_info_s info = get_zone_infos(GET_RAW_SIZE(meta));
 
