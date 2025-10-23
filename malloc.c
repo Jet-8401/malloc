@@ -64,7 +64,6 @@ static void *_handle_large_alloc(size_t chunk_size) {
     chunk_header_t *chunk = (chunk_header_t*)
         ((uint8_t*) allocated_zone + mctx.ALIGNED_ZONE_METADATA);
     chunk->size = size - mctx.ALIGNED_ZONE_METADATA;
-    chunk->magic = MAGIC_NUMBER;
 
     return (uint8_t*) chunk + mctx.HEADER_SIZE;
 }
@@ -96,7 +95,9 @@ static void *_search_free_list(zone_metadata_t *zone, size_t chunk_size) {
 
         remove_from_list(&zone->begin, chunk_it);
 
-        return (uint8_t*) chunk_it + mctx.HEADER_SIZE;
+        chunk_header_t *allocated_chunk = (chunk_header_t*) chunk_it;
+
+        return (uint8_t*) allocated_chunk + mctx.HEADER_SIZE;
     }
     return NULL;
 }
@@ -123,7 +124,6 @@ static void *_carve_space(zone_metadata_t *zone, size_t chunk_size) {
     // restore the previous top address to the current allocated block
     chunk_header_t *allocated_chunk = prev_top;
     allocated_chunk->size = chunk_size;
-    allocated_chunk->magic = MAGIC_NUMBER;
 
     return (uint8_t*) allocated_chunk + mctx.HEADER_SIZE;
 }

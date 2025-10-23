@@ -23,6 +23,7 @@ static const uint8_t MEM_ALIGNMENT = _Alignof(max_align_t) <= 8 ?
 
 /* chunks metadata */
 
+# define IS_ALLOCATED ((size_t) 1 << 0)
 # define IS_PREV_FREE ((size_t) 1 << 1)
 # define CHUNK_META_MASK ((size_t) 0x7)
 # define UNMASK(size) (size & ~CHUNK_META_MASK)
@@ -34,10 +35,7 @@ static const uint8_t MEM_ALIGNMENT = _Alignof(max_align_t) <= 8 ?
 // `size` is the full chunk size not just the user payload
 typedef struct chunk_header_s {
     size_t size;
-    uint32_t magic; // use do detect ownership of pointer inside free
 }   chunk_header_t;
-
-# define MAGIC_NUMBER 0xDEADBEEF
 
 // freed_* structures are metadata that apply only for freed chunks
 typedef struct freed_header_s {
@@ -115,21 +113,25 @@ struct zone_info_s {
 struct zone_info_s get_zone_infos(const size_t size);
 void zone_push_back(zone_metadata_t **head, zone_metadata_t *zone);
 
-static inline chunk_header_t *advance_chunk(chunk_header_t *chunk) {
-    return (chunk_header_t*) ((char*) chunk + UNMASK(chunk->size));
+static inline void MARK_FREE(chunk_header_t *chunk) {
+    chunk->size &= ~IS_ALLOCATED;
 }
 
-static inline freed_header_t *get_prev_chunk(chunk_header_t *chunk) {
+static inline chunk_header_t *ADVANCE_CHUNK(chunk_header_t *chunk) {
+    return (chunk_header_t*) ((uint8_t*) chunk + UNMASK(chunk->size));
+}
+
+static inline freed_header_t *GET_PREV_CHUNK(chunk_header_t *chunk) {
     if (!(chunk->size & IS_PREV_FREE))
         return NULL;
-    freed_footer_t *footer = (freed_footer_t*) ((char*) chunk -
+    freed_footer_t *footer = (freed_footer_t*) ((uint8_t*) chunk -
         sizeof(freed_footer_t));
-    return (freed_header_t*) ((char*) chunk - footer->prev_size);
+    return (freed_header_t*) ((uint8_t*) chunk - footer->prev_size);
 }
 
-static inline void write_footer(freed_header_t *chunk) {
+static inline void WRITE_FOOTER(freed_header_t *chunk) {
     size_t raw_size = UNMASK(chunk->size);
-    freed_footer_t *footer = (freed_footer_t*) ((char*) chunk + raw_size -
+    freed_footer_t *footer = (freed_footer_t*) ((uint8_t*) chunk + raw_size -
         sizeof(freed_footer_t));
     footer->prev_size = raw_size;
 }

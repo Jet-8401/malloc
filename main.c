@@ -19,6 +19,7 @@ int main() {
     void *other_big_alloc = malloc(m);
     memset(other_big_alloc, 'b', m);
 
+	// added comment through vim
     free(other_big_alloc);
 
     return 0;
