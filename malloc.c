@@ -68,7 +68,7 @@ static void *_handle_large_alloc(size_t chunk_size) {
     return (uint8_t*) chunk + mctx.HEADER_SIZE;
 }
 
-static void remove_from_list(freed_header_t **origin, freed_header_t *node) {
+static void _remove_from_list(freed_header_t **origin, freed_header_t *node) {
     if (node->prev) {
         node->prev->next = node->next;
     } else if (node == *origin) {
@@ -90,10 +90,10 @@ static void *_search_free_list(zone_metadata_t *zone, size_t chunk_size) {
         chunk_it != NULL;
         chunk_it = chunk_it->next
     ) {
-        if (chunk_it->size < chunk_size)
+        if (GET_RAW_SIZE(chunk_it) < chunk_size)
             continue;
 
-        remove_from_list(&zone->begin, chunk_it);
+        _remove_from_list(&zone->begin, chunk_it);
 
         chunk_header_t *allocated_chunk = (chunk_header_t*) chunk_it;
 
@@ -110,7 +110,7 @@ static void *_carve_space(zone_metadata_t *zone, size_t chunk_size) {
     // note: both chunk size and top size are unsigned, make sure no overflow
     // can happend
     if (zone->top->size <= chunk_size ||
-        zone->top->size - chunk_size < mctx.HEADER_SIZE)
+        zone->top->size - chunk_size <= mctx.HEADER_SIZE)
         return NULL;
 
     // save the top address
