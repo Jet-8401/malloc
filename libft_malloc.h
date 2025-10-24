@@ -23,7 +23,7 @@ static const uint8_t MEM_ALIGNMENT = _Alignof(max_align_t) <= 8 ?
 
 /* chunks metadata */
 
-# define IS_ALLOCATED ((size_t) 1 << 0)
+# define IS_FREE ((size_t) 1 << 0)
 # define IS_PREV_FREE ((size_t) 1 << 1)
 # define CHUNK_META_MASK ((size_t) 0x7)
 # define UNMASK(size) (size & ~CHUNK_META_MASK)
@@ -112,21 +112,18 @@ struct zone_info_s {
 
 struct zone_info_s get_zone_infos(const size_t size);
 void zone_push_back(zone_metadata_t **head, zone_metadata_t *zone);
+void remove_from_list(freed_header_t **head, freed_header_t *node);
 
-static inline void MARK_FREE(chunk_header_t *chunk) {
-    chunk->size &= ~IS_ALLOCATED;
+static inline void *ADVANCE_CHUNK(chunk_header_t *chunk) {
+    return ((uint8_t*) chunk + UNMASK(chunk->size));
 }
 
-static inline chunk_header_t *ADVANCE_CHUNK(chunk_header_t *chunk) {
-    return (chunk_header_t*) ((uint8_t*) chunk + UNMASK(chunk->size));
-}
-
-static inline freed_header_t *GET_PREV_CHUNK(chunk_header_t *chunk) {
+static inline void *GET_PREV_CHUNK(chunk_header_t *chunk) {
     if (!(chunk->size & IS_PREV_FREE))
         return NULL;
     freed_footer_t *footer = (freed_footer_t*) ((uint8_t*) chunk -
         sizeof(freed_footer_t));
-    return (freed_header_t*) ((uint8_t*) chunk - footer->prev_size);
+    return ((uint8_t*) chunk - footer->prev_size);
 }
 
 static inline void WRITE_FOOTER(freed_header_t *chunk) {
@@ -134,6 +131,18 @@ static inline void WRITE_FOOTER(freed_header_t *chunk) {
     freed_footer_t *footer = (freed_footer_t*) ((uint8_t*) chunk + raw_size -
         sizeof(freed_footer_t));
     footer->prev_size = raw_size;
+}
+
+static inline void MARK_ALLOCATED(chunk_header_t *chunk) {
+    chunk_header_t *fw_chunk = (chunk_header_t*) ADVANCE_CHUNK(chunk);
+    fw_chunk->size &= ~IS_PREV_FREE;
+    chunk->size &= ~IS_FREE;
+}
+
+static inline void MARK_FREE(chunk_header_t *chunk) {
+    chunk_header_t *fw_chunk = (chunk_header_t*) ADVANCE_CHUNK(chunk);
+    fw_chunk->size |= IS_PREV_FREE;
+    chunk->size |= IS_FREE;
 }
 
 /* functions prototypes */

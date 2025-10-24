@@ -35,3 +35,18 @@ void zone_push_back(zone_metadata_t **head, zone_metadata_t *zone) {
         zone->prev = current;
     }
 }
+
+void remove_from_list(freed_header_t **head, freed_header_t *node) {
+    if (node->prev) {
+        node->prev->next = node->next;
+    } else if (node == *head) {
+        *head = node->next;
+    }
+
+    if (node->next) {
+        node->next->prev = node->prev;
+    }
+
+    node->next = NULL;
+    node->prev = NULL;
+}
