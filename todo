@@ -1,0 +1,5 @@
+done: ✅, undone: ❎
+increase multi-threading performance ❎
+clean code ❎
+make free chunk split inside malloc's function _search_free_list ✅
+add more code documentation ❎

@@ -121,7 +121,7 @@ bool search_pointer_in_heap(void *ptr, zone_metadata_t **zone, chunk_header_t **
 int compute_chunk_size(size_t user_size, size_t *chunk_size);
 
 static inline void *ADVANCE_CHUNK(chunk_header_t *chunk) {
-    return ((uint8_t*) chunk + UNMASK(chunk->size));
+    return ((uint8_t*) chunk + GET_RAW_SIZE(chunk));
 }
 
 static inline void *GET_PREV_CHUNK(chunk_header_t *chunk) {
@@ -133,7 +133,7 @@ static inline void *GET_PREV_CHUNK(chunk_header_t *chunk) {
 }
 
 static inline void WRITE_FOOTER(freed_header_t *chunk) {
-    size_t raw_size = UNMASK(chunk->size);
+    size_t raw_size = GET_RAW_SIZE(chunk);
     freed_footer_t *footer = (freed_footer_t*) ((uint8_t*) chunk + raw_size -
         sizeof(freed_footer_t));
     footer->prev_size = raw_size;

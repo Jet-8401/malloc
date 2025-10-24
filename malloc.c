@@ -55,11 +55,36 @@ static void *_search_free_list(zone_metadata_t *zone, size_t chunk_size) {
         if (GET_RAW_SIZE(chunk_it) < chunk_size)
             continue;
 
-        remove_from_list(&zone->begin, chunk_it);
+        chunk_header_t *allocated_chunk = NULL;
 
-        chunk_header_t *allocated_chunk = (chunk_header_t*) chunk_it;
+        // check if we can split the freed chunk
+        const size_t remaining_size = GET_RAW_SIZE(chunk_it) - chunk_size;
+        if (remaining_size < mctx.MIN_CHUNK_SIZE) {
+            // can't split because the remaining size of the splitted block
+            // would not be enough to fit the minimum required space for a chunk
+
+            remove_from_list(&zone->begin, chunk_it);
+
+            // allocated_chunk become the whole freed chunk so no need to change
+            // or update any values
+            allocated_chunk = (chunk_header_t*) chunk_it;
+        } else {
+            // else the allocated chunk is taken after the freed memory so
+            // we only need to update the freed chunk size
+            // note: important to update the state of chunks such as recreating
+            // the footer of the freed chunk and set the IS_PREV_FREE flag of
+            // the newly allocated chunk
+            chunk_it->size = remaining_size;
+            WRITE_FOOTER(chunk_it);
+
+            // setup values of allocated chunk in memory
+            allocated_chunk = ADVANCE_CHUNK((chunk_header_t*) chunk_it);
+            allocated_chunk->size = chunk_size | IS_PREV_FREE;
+        }
+
         MARK_ALLOCATED(allocated_chunk);
 
+        // return the user space address
         return (uint8_t*) allocated_chunk + mctx.HEADER_SIZE;
     }
     return NULL;
@@ -89,6 +114,7 @@ static void *_carve_space(zone_metadata_t *zone, size_t chunk_size) {
     allocated_chunk->size = chunk_size;
     MARK_ALLOCATED(allocated_chunk);
 
+    // return the user space address
     return (uint8_t*) allocated_chunk + mctx.HEADER_SIZE;
 }
 
