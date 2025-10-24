@@ -1,5 +1,5 @@
+#include "libft_malloc.h"
 #include <stdlib.h>
-#include <string.h>
 
 int main() {
     // {
@@ -41,6 +41,8 @@ int main() {
         int *a = malloc(sizeof(int));
         int *b = malloc(sizeof(int));
         int *c = malloc(sizeof(int));
+
+        show_alloc_mem();
 
         free(a);
         free(b);

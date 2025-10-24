@@ -8,7 +8,7 @@ NAME = $(LIBNAME)_$(HOSTTYPE).so
 CFLAGS = -std=gnu11 -Wall -Werror -Wextra -fPIC -g -O0
 # -O3
 
-SRCS = defines.c utils.c malloc.c free.c realloc.c calloc.c
+SRCS = defines.c utils.c show_alloc_mem.c malloc.c free.c realloc.c calloc.c
 OBJS = $(SRCS:.c=.o)
 
 all: $(NAME)

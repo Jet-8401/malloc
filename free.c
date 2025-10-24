@@ -5,10 +5,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-static void _handle_large_free(zone_metadata_t **head, chunk_header_t *chunk) {
-    zone_metadata_t *zone = (zone_metadata_t*)
-        ((uint8_t*) chunk - mctx.ALIGNED_ZONE_METADATA);
-
+static void _remove_zone(zone_metadata_t **head, zone_metadata_t *zone) {
     if (zone->prev == NULL) {
         *head = zone->next;
     } else {
@@ -21,6 +18,13 @@ static void _handle_large_free(zone_metadata_t **head, chunk_header_t *chunk) {
 
     zone->next = NULL;
     zone->prev = NULL;
+}
+
+static void _handle_large_free(zone_metadata_t **head, chunk_header_t *chunk) {
+    zone_metadata_t *zone = (zone_metadata_t*)
+        ((uint8_t*) chunk - mctx.ALIGNED_ZONE_METADATA);
+
+    _remove_zone(head, zone);
 
     if (munmap(zone, zone->size) == -1) {
         write(2, "unmap error\n", 12);
@@ -171,10 +175,21 @@ void free(void *ptr) {
         return;
     }
 
-    if (zone->type == LARGE)
+    if (zone->type == LARGE) {
         _handle_large_free(&mctx.allocator.large_zone, meta);
-    else
+    } else {
         _handle_free(meta, zone);
+        if (zone->top != (void*) zone + mctx.ALIGNED_ZONE_METADATA) {
+            pthread_mutex_unlock(&mctx.g_lock);
+            return;
+        }
+
+        zone_metadata_t **head = zone->type == TINY ?
+            &mctx.allocator.tiny_zone : &mctx.allocator.small_zone;
+        _remove_zone(head, zone);
+        if (munmap(zone, zone->size) == -1)
+            write(2, "unmap error\n", 12);
+    }
 
     pthread_mutex_unlock(&mctx.g_lock);
 }

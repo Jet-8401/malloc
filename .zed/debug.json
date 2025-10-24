@@ -35,10 +35,10 @@
         "label": "debug main.c",
         "request": "launch",
         "env": {
-            "LD_PRELOAD": "./libft_malloc.so"
+            "LD_LIBRARY_PATH": "."
         },
         "build": {
-            "command": "make re && gcc -O0 -g -Wall -Werror -Wextra main.c"
+            "command": "make re && gcc -O0 -g -Wall -Werror -Wextra main.c -L. -lft_malloc"
         }
     }
 ]
