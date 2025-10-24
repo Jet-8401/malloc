@@ -1,42 +1,6 @@
 #include "libft_malloc.h"
 #include <errno.h>
 
-struct zone_info_s get_zone_infos(const size_t payload_size) {
-    struct zone_info_s info;
-
-    if (payload_size <= TINY_ZONE_TRESHOLD) {
-        info.zone = &mctx.allocator.tiny_zone;
-        info.type = TINY;
-        info.lock = &mctx.tiny_lock;
-    } else if (payload_size <= SMALL_ZONE_TRESHOLD) {
-        info.zone = &mctx.allocator.small_zone;
-        info.type = SMALL;
-        info.lock = &mctx.small_lock;
-    } else {
-        info.zone = &mctx.allocator.large_zone;
-        info.type = LARGE;
-        info.lock = &mctx.large_lock;
-    }
-
-    return info;
-}
-
-void zone_push_back(zone_metadata_t **head, zone_metadata_t *zone) {
-    zone->next = NULL;
-    zone->prev = NULL;
-
-    if (*head == NULL) {
-        *head = zone;
-    } else {
-        zone_metadata_t *current = *head;
-        while (current->next != NULL) {
-            current = current->next;
-        }
-        current->next = zone;
-        zone->prev = current;
-    }
-}
-
 void remove_from_list(freed_header_t **head, freed_header_t *node) {
     if (node->prev) {
         node->prev->next = node->next;
@@ -51,8 +15,6 @@ void remove_from_list(freed_header_t **head, freed_header_t *node) {
     node->next = NULL;
     node->prev = NULL;
 }
-
-#include <stdbool.h>
 
 static bool _is_pointer_valid(
     zone_metadata_t *zone,
@@ -77,22 +39,22 @@ bool search_pointer_in_heap(
     zone_metadata_t **zone,
     chunk_header_t **chunk
 ) {
-    bool was_found = false;
+    bool found = false;
     zone_metadata_t *callback = NULL;
 
     if (_is_pointer_valid(mctx.allocator.tiny_zone, ptr, &callback))
-        was_found = true;
-    if (!was_found && _is_pointer_valid(mctx.allocator.small_zone, ptr, &callback))
-        was_found = true;
-    if (!was_found && _is_pointer_valid(mctx.allocator.large_zone, ptr, &callback))
-        was_found = true;
+        found = true;
+    if (!found && _is_pointer_valid(mctx.allocator.small_zone, ptr, &callback))
+        found = true;
+    if (!found && _is_pointer_valid(mctx.allocator.large_zone, ptr, &callback))
+        found = true;
 
-    if (was_found) {
+    if (found) {
         *zone = callback;
         *chunk = (chunk_header_t*) ((uint8_t*) ptr - mctx.HEADER_SIZE);
     }
 
-    return was_found;
+    return found;
 }
 
 int compute_chunk_size(size_t user_size, size_t *chunk_size) {

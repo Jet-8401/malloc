@@ -1,5 +1,5 @@
 done: ✅, undone: ❎
 increase multi-threading performance ❎
-clean code ❎
-make free chunk split inside malloc's function _search_free_list ✅
+clean code ✅
 add more code documentation ❎
+implement show_alloc_mem() ❎

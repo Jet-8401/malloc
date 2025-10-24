@@ -12,6 +12,23 @@
 #define alloc(size) mmap(NULL, size, PROT_READ | PROT_WRITE, \
     MAP_ANON | MAP_PRIVATE, -1, 0)
 
+static void _zone_push_back(zone_metadata_t **head, zone_metadata_t *zone) {
+    zone->next = NULL;
+    zone->prev = NULL;
+
+    if (*head == NULL) {
+        *head = zone;
+    } else {
+        zone_metadata_t *current = *head;
+        while (current->next != NULL) {
+            current = current->next;
+        }
+        current->next = zone;
+        zone->prev = current;
+    }
+}
+
+// Large allocations are direct mmap'ed and push to the back the list.
 static void *_handle_large_alloc(size_t chunk_size) {
     const size_t page_size = sysconf(_SC_PAGESIZE);
 
@@ -36,7 +53,7 @@ static void *_handle_large_alloc(size_t chunk_size) {
 
     allocated_zone->size = size;
     allocated_zone->type = LARGE;
-    zone_push_back(&mctx.allocator.large_zone, allocated_zone);
+    _zone_push_back(&mctx.allocator.large_zone, allocated_zone);
 
     chunk_header_t *chunk = (chunk_header_t*)
         ((uint8_t*) allocated_zone + mctx.ALIGNED_ZONE_METADATA);
@@ -153,6 +170,11 @@ static zone_metadata_t *_alloc_zone(enum ZONE_TYPE type) {
     return zone;
 }
 
+struct zone_info_s {
+	zone_metadata_t **zone;
+	enum ZONE_TYPE type;
+};
+
 // Handle the allocation of chunks with a first-fit algorithm.
 // If no space is available the function will try to allocate more memory.
 static void *_handle_alloc(struct zone_info_s info, size_t chunk_size) {
@@ -189,20 +211,33 @@ static void *_handle_alloc(struct zone_info_s info, size_t chunk_size) {
     return _carve_space(allocated_zone, chunk_size);
 }
 
-void *malloc(size_t size) {
-    pthread_mutex_lock(&mctx.tiny_lock);
+// Get the zone type and head of list based on the size of the payload
+static struct zone_info_s _get_zone_infos(const size_t payload_size) {
+    struct zone_info_s info;
 
-    const struct zone_info_s info = get_zone_infos(size);
+    if (payload_size <= TINY_ZONE_TRESHOLD) {
+        info.zone = &mctx.allocator.tiny_zone;
+        info.type = TINY;
+    } else if (payload_size <= SMALL_ZONE_TRESHOLD) {
+        info.zone = &mctx.allocator.small_zone;
+        info.type = SMALL;
+    } else {
+        info.zone = &mctx.allocator.large_zone;
+        info.type = LARGE;
+    }
+
+    return info;
+}
+
+void *malloc(size_t size) {
+    const struct zone_info_s info = _get_zone_infos(size);
 
     size_t chunk_size;
     if (compute_chunk_size(size, &chunk_size) == -1) {
-        pthread_mutex_unlock(&mctx.tiny_lock);
         return NULL;
     }
 
-    // lock the zone mutex inside malloc
-    // and don't touch the mutex anywhere else
-    // pthread_mutex_lock(info.lock);
+    pthread_mutex_lock(&mctx.g_lock);
 
     void *chunk;
     if (info.type == LARGE) {
@@ -211,7 +246,6 @@ void *malloc(size_t size) {
         chunk = _handle_alloc(info, chunk_size);
     }
 
-    // pthread_mutex_unlock(info.lock);
-    pthread_mutex_unlock(&mctx.tiny_lock);
+    pthread_mutex_unlock(&mctx.g_lock);
     return chunk;
 }

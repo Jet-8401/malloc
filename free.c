@@ -162,27 +162,19 @@ void free(void *ptr) {
     if (!ptr)
         return;
 
-    pthread_mutex_lock(&mctx.tiny_lock);
+    pthread_mutex_lock(&mctx.g_lock);
 
     zone_metadata_t *zone = NULL;
     chunk_header_t *meta = NULL;
     if (!search_pointer_in_heap(ptr, &zone, &meta)) {
-        pthread_mutex_unlock(&mctx.tiny_lock);
+        pthread_mutex_unlock(&mctx.g_lock);
         return;
     }
-
-    // chunk_header_t *meta = (void*) ((uint8_t*) ptr - mctx.HEADER_SIZE);
-    // const struct zone_info_s info = get_zone_infos(
-    //     GET_RAW_SIZE(meta) - mctx.HEADER_SIZE
-    // );
-
-    // pthread_mutex_lock(info.lock);
 
     if (zone->type == LARGE)
         _handle_large_free(&mctx.allocator.large_zone, meta);
     else
         _handle_free(meta, zone);
 
-    // pthread_mutex_unlock(info.lock);
-    pthread_mutex_unlock(&mctx.tiny_lock);
+    pthread_mutex_unlock(&mctx.g_lock);
 }

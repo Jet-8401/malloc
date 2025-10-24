@@ -12,13 +12,13 @@ void	*realloc(void *ptr, size_t size) {
         return NULL;
     }
 
-    pthread_mutex_lock(&mctx.tiny_lock);
+    pthread_mutex_lock(&mctx.g_lock);
     zone_metadata_t *zone;
     chunk_header_t *chunk;
     if (!search_pointer_in_heap(ptr, &zone, &chunk)) {
         return NULL;
     }
-    pthread_mutex_unlock(&mctx.tiny_lock);
+    pthread_mutex_unlock(&mctx.g_lock);
 
     size_t old_user_size = GET_RAW_SIZE(chunk) - mctx.HEADER_SIZE;
 

@@ -9,9 +9,7 @@ static const size_t MIN_ALLOCS = 100;
 mctx_t mctx = {
     .allocator = { NULL, NULL, NULL },
 
-    .tiny_lock = PTHREAD_MUTEX_INITIALIZER,
-    .small_lock = PTHREAD_MUTEX_INITIALIZER,
-    .large_lock = PTHREAD_MUTEX_INITIALIZER,
+    .g_lock = PTHREAD_MUTEX_INITIALIZER,
 
     .ALIGNED_ZONE_METADATA = ALIGN(sizeof(zone_metadata_t)),
     // .ALIGNED_LARGE_ZONE_META = ALIGN(sizeof(large_zone_meta_t)),

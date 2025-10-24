@@ -88,9 +88,7 @@ typedef struct allocator_s {
 typedef struct malloc_context_s {
     allocator_t allocator;
 
-    pthread_mutex_t tiny_lock;
-	pthread_mutex_t small_lock;
-	pthread_mutex_t large_lock;
+    pthread_mutex_t g_lock;
 
 	const uint8_t ALIGNED_ZONE_METADATA;
 	// const uint8_t ALIGNED_LARGE_ZONE_META;
@@ -108,14 +106,6 @@ extern mctx_t mctx;
 
 /* utils function */
 
-struct zone_info_s {
-	zone_metadata_t **zone;
-	enum ZONE_TYPE type;
-	pthread_mutex_t *lock;
-};
-
-struct zone_info_s get_zone_infos(const size_t size);
-void zone_push_back(zone_metadata_t **head, zone_metadata_t *zone);
 void remove_from_list(freed_header_t **head, freed_header_t *node);
 bool search_pointer_in_heap(void *ptr, zone_metadata_t **zone, chunk_header_t **chunk);
 int compute_chunk_size(size_t user_size, size_t *chunk_size);
