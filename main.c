@@ -42,11 +42,11 @@ int main() {
         int *b = malloc(sizeof(int));
         int *c = malloc(sizeof(int));
 
-        free(c);
+        free(a);
 
         free(b);
 
-        free(a);
+        free(c);
 
         int *d = malloc(sizeof(int));
 

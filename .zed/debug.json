@@ -1,0 +1,44 @@
+// Project-local debug tasks
+//
+// For more documentation on how to configure debug tasks,
+// see: https://zed.dev/docs/debugger
+[
+    {
+        "adapter": "CodeLLDB",
+        "request": "launch",
+        "label": "debug extern program",
+        "program": "/bin/bash",
+        "args": [],
+        "env": {
+            "LD_PRELOAD": "./libft_malloc.so"
+        },
+        "build": {
+            "command": "make re"
+        }
+    },
+    {
+        "adapter": "CodeLLDB",
+        "request": "launch",
+        "label": "debug test",
+        "program": "test_malloc",
+        "args": ["--enable-dangerous"],
+        "env": {
+            "LD_LIBRARY_PATH": "."
+        },
+        "build": {
+            "command": "make re"
+        }
+    },
+    {
+        "adapter": "CodeLLDB",
+        "program": "./a.out",
+        "label": "debug main.c",
+        "request": "launch",
+        "env": {
+            "LD_PRELOAD": "./libft_malloc.so"
+        },
+        "build": {
+            "command": "make re && gcc -O0 -g -Wall -Werror -Wextra main.c"
+        }
+    }
+]

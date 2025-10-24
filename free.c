@@ -80,10 +80,37 @@ static void coalesce_both(freed_header_t *chunk, zone_metadata_t *zone) {
     WRITE_FOOTER(bw_chunk);
 }
 
-// static void null_function(void* chunk, void* zone) {
-//     (void) chunk;
-//     (void) zone;
-// }
+static void top_chunk_absorb(freed_header_t *chunk, zone_metadata_t *zone) {
+    // store the old size of the top chunk before changing top address
+    const size_t old_size = zone->top->size;
+
+    // put zone to the begining of the chunk to absorb it
+    zone->top = (void*) chunk;
+    zone->top->size = old_size + GET_RAW_SIZE(chunk);
+}
+
+static void coalesce_bw_and_absorb(
+    freed_header_t *chunk,
+    zone_metadata_t *zone
+) {
+    freed_header_t *bw_chunk = GET_PREV_CHUNK((chunk_header_t*) chunk);
+    remove_from_list(&zone->begin, bw_chunk);
+
+    // total_size is the full size that the top chunk should absorb
+    const size_t total_size = GET_RAW_SIZE(chunk) + GET_RAW_SIZE(bw_chunk);
+
+    // store the old size of the top chunk before changing top address
+    const size_t old_size = zone->top->size;
+
+    // put zone to the begining of the farthest chunk in memory to absorb it
+    zone->top = (void*) bw_chunk;
+    zone->top->size = old_size + total_size;
+}
+
+static void null_function(freed_header_t* chunk, zone_metadata_t* zone) {
+    (void) chunk;
+    (void) zone;
+}
 
 // COALESCE_NONE = adding free chunk to list
 // COALESCE_BACKWARD = updating the backward chunk already in free list
@@ -101,22 +128,22 @@ static coalesce_strategy strategies[] = {
     coalesce_forward,       // 0b00000001
     coalesce_backward,      // 0b00000010
     coalesce_both,          // 0b00000011
-    // top_chunk_absorb,       // 0b00000100
-    // null_function,          // 0b00000101
-    // coalesce_bw_and_absorb, // 0b00000110
-    // null_function           // 0b00000111
+    top_chunk_absorb,       // 0b00000100
+    null_function,          // 0b00000101
+    coalesce_bw_and_absorb, // 0b00000110
+    null_function           // 0b00000111
 };
 
 static void _handle_free(chunk_header_t *chunk, zone_metadata_t *zone) {
     uint8_t actions = COALESCE_NONE;
 
     chunk_header_t *fw_chunk = ADVANCE_CHUNK(chunk);
-    if (fw_chunk != zone->top && fw_chunk->size & IS_FREE) {
-        actions |= COALESCE_FORWARD;
+    if (fw_chunk != zone->top) {
+        if (fw_chunk->size & IS_FREE)
+            actions |= COALESCE_FORWARD;
+    } else {
+        actions |= TOP_CHUNK_ABSORB;
     }
-    // } else {
-    //     actions |= TOP_CHUNK_ABSORB;
-    // }
 
     if (chunk->size & IS_PREV_FREE) {
         actions |= COALESCE_BACKWARD;
@@ -131,71 +158,31 @@ static void _handle_free(chunk_header_t *chunk, zone_metadata_t *zone) {
     strategies[actions](freed_chunk, zone);
 }
 
-// Return a boolean if the pointer have been found inside a zone.
-// **zone_found can be null else it will put the zone where the pointer
-// was found in it.
-static bool _is_pointer_valid(
-    zone_metadata_t *zone,
-    void *ptr,
-    zone_metadata_t **zone_found
-) {
-    for (; zone != NULL; zone = zone->next) {
-        void *zone_payload = (uint8_t*) zone + mctx.ALIGNED_ZONE_METADATA;
-        void *zone_end = (uint8_t*) zone + zone->size - mctx.HEADER_SIZE;
-        if (ptr < zone_payload || ptr >= zone_end)
-            continue;
-
-        if (zone_found)
-            *zone_found = zone;
-        return true;
-    }
-    return false;
-}
-
 void free(void *ptr) {
     if (!ptr)
         return;
 
-    zone_metadata_t *zone = NULL;
-    // Range based validation for pointer ownsership, very slow and ineficient
-    // but only way that won't take ages to implement and is 100% sure that
-    // this pointer come from our malloc.
-    // This is needed to test implementation on heavy program like /bin/bash.
     pthread_mutex_lock(&mctx.tiny_lock);
-    if (mctx.allocator.tiny_zone &&
-        !_is_pointer_valid(mctx.allocator.tiny_zone, ptr, &zone)) {
+
+    zone_metadata_t *zone = NULL;
+    chunk_header_t *meta = NULL;
+    if (!search_pointer_in_heap(ptr, &zone, &meta)) {
         pthread_mutex_unlock(&mctx.tiny_lock);
         return;
     }
-    pthread_mutex_unlock(&mctx.tiny_lock);
 
-    pthread_mutex_lock(&mctx.small_lock);
-    if (mctx.allocator.small_zone &&
-        !_is_pointer_valid(mctx.allocator.small_zone, ptr, &zone)) {
-        pthread_mutex_unlock(&mctx.small_lock);
-        return;
-    }
-    pthread_mutex_unlock(&mctx.small_lock);
+    // chunk_header_t *meta = (void*) ((uint8_t*) ptr - mctx.HEADER_SIZE);
+    // const struct zone_info_s info = get_zone_infos(
+    //     GET_RAW_SIZE(meta) - mctx.HEADER_SIZE
+    // );
 
-    pthread_mutex_lock(&mctx.large_lock);
-    if (mctx.allocator.large_zone &&
-        !_is_pointer_valid(mctx.allocator.large_zone, ptr, &zone)) {
-        pthread_mutex_unlock(&mctx.large_lock);
-        return;
-    }
-    pthread_mutex_unlock(&mctx.large_lock);
+    // pthread_mutex_lock(info.lock);
 
-    chunk_header_t *meta = (void*) ((uint8_t*) ptr - mctx.HEADER_SIZE);
-    const struct zone_info_s info = get_zone_infos(
-        GET_RAW_SIZE(meta) - mctx.HEADER_SIZE
-    );
-
-    pthread_mutex_lock(info.lock);
-
-    if (info.type == LARGE)
-        _handle_large_free(info.zone, meta);
+    if (zone->type == LARGE)
+        _handle_large_free(&mctx.allocator.large_zone, meta);
     else
         _handle_free(meta, zone);
 
-    pthread_mutex_unlock(info.lock);
+    // pthread_mutex_unlock(info.lock);
+    pthread_mutex_unlock(&mctx.tiny_lock);
 }

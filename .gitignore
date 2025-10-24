@@ -4,6 +4,4 @@
 *.gch
 *.pch
 
-*.zed
-
 tests/

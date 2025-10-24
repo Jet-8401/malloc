@@ -29,4 +29,11 @@ fclean: clean
 
 re: fclean all
 
-.PHONY: all clean fclean re
+test: $(NAME)
+	$(CC) $(CFLAGS) -o test_malloc test_malloc.c -L. -lft_malloc -lpthread
+	@echo "\n$(shell tput bold)$(shell tput setaf 2)Test binary created! Run with: LD_LIBRARY_PATH=. ./test_malloc$(shell tput sgr0)\n"
+
+run_test: test
+	@LD_LIBRARY_PATH=. ./test_malloc --enable-dangerous
+
+.PHONY: all clean fclean re test run_test

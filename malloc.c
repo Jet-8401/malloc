@@ -12,30 +12,6 @@
 #define alloc(size) mmap(NULL, size, PROT_READ | PROT_WRITE, \
     MAP_ANON | MAP_PRIVATE, -1, 0)
 
-static int _compute_chunk_size(size_t user_size, size_t *chunk_size) {
-    // check ALIGN won't overflow
-    if (user_size > SIZE_MAX - (MEM_ALIGNMENT - 1)) {
-        errno = ENOMEM;
-        return -1;
-    }
-
-    // check adding header won't overflow
-    size_t aligned = ALIGN(user_size);
-    if (aligned > SIZE_MAX - mctx.HEADER_SIZE) {
-        errno = ENOMEM;
-        return -1;
-    }
-
-    // make chunk be at least MIN_CHUNK_SIZE to fit the freed chunk
-    // metadata once freed
-    size_t chunk = aligned + mctx.HEADER_SIZE;
-    if (chunk < mctx.MIN_CHUNK_SIZE)
-        chunk = mctx.MIN_CHUNK_SIZE;
-
-    *chunk_size = chunk;
-    return 0;
-}
-
 static void *_handle_large_alloc(size_t chunk_size) {
     const size_t page_size = sysconf(_SC_PAGESIZE);
 
@@ -58,8 +34,9 @@ static void *_handle_large_alloc(size_t chunk_size) {
     if (allocated_zone == MAP_FAILED)
         return NULL;
 
-    zone_push_back(&mctx.allocator.large_zone, allocated_zone);
     allocated_zone->size = size;
+    allocated_zone->type = LARGE;
+    zone_push_back(&mctx.allocator.large_zone, allocated_zone);
 
     chunk_header_t *chunk = (chunk_header_t*)
         ((uint8_t*) allocated_zone + mctx.ALIGNED_ZONE_METADATA);
@@ -142,6 +119,7 @@ static zone_metadata_t *_alloc_zone(enum ZONE_TYPE type) {
     memset(zone, 0, sizeof(zone_metadata_t));
 
     zone->size = size;
+    zone->type = type;
     zone->top = (chunk_header_t*)
         ((uint8_t*) zone + mctx.ALIGNED_ZONE_METADATA);
     zone->top->size = size - mctx.ALIGNED_ZONE_METADATA;
@@ -186,15 +164,19 @@ static void *_handle_alloc(struct zone_info_s info, size_t chunk_size) {
 }
 
 void *malloc(size_t size) {
+    pthread_mutex_lock(&mctx.tiny_lock);
+
     const struct zone_info_s info = get_zone_infos(size);
 
     size_t chunk_size;
-    if (_compute_chunk_size(size, &chunk_size) == -1)
+    if (compute_chunk_size(size, &chunk_size) == -1) {
+        pthread_mutex_unlock(&mctx.tiny_lock);
         return NULL;
+    }
 
     // lock the zone mutex inside malloc
     // and don't touch the mutex anywhere else
-    pthread_mutex_lock(info.lock);
+    // pthread_mutex_lock(info.lock);
 
     void *chunk;
     if (info.type == LARGE) {
@@ -203,6 +185,7 @@ void *malloc(size_t size) {
         chunk = _handle_alloc(info, chunk_size);
     }
 
-    pthread_mutex_unlock(info.lock);
+    // pthread_mutex_unlock(info.lock);
+    pthread_mutex_unlock(&mctx.tiny_lock);
     return chunk;
 }

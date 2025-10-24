@@ -7,6 +7,7 @@
 # include <stdlib.h>
 # include <pthread.h>
 # include <stdint.h>
+# include <stdbool.h>
 
 # define TINY_ZONE_TRESHOLD 128
 # define SMALL_ZONE_TRESHOLD 2048
@@ -55,12 +56,15 @@ enum ZONE_TYPE { TINY, SMALL, LARGE };
 // Zone is a multiple of sysconf(_SC_PAGESIZE).
 // In every zone type even LARGE ones an entire zone is one mmap call.
 
+typedef void (*free_method)(void *ptr);
+
 typedef struct zone_metadata_s {
 	size_t size;
 	struct zone_metadata_s *next;
 	struct zone_metadata_s *prev;
 	freed_header_t *begin;
 	chunk_header_t *top;
+	enum ZONE_TYPE type;
 }	zone_metadata_t;
 
 // typedef struct large_zone_metadata_s {
@@ -113,6 +117,8 @@ struct zone_info_s {
 struct zone_info_s get_zone_infos(const size_t size);
 void zone_push_back(zone_metadata_t **head, zone_metadata_t *zone);
 void remove_from_list(freed_header_t **head, freed_header_t *node);
+bool search_pointer_in_heap(void *ptr, zone_metadata_t **zone, chunk_header_t **chunk);
+int compute_chunk_size(size_t user_size, size_t *chunk_size);
 
 static inline void *ADVANCE_CHUNK(chunk_header_t *chunk) {
     return ((uint8_t*) chunk + UNMASK(chunk->size));
