@@ -23,19 +23,19 @@ int main() {
     // 	// added comment through vim
     //     free(other_big_alloc);
     // }
-    // {
-    //     int *a = malloc(sizeof(int)); // 0x100
-    //     int *b = malloc(sizeof(int)); // 0x101
+    {
+        int *a = malloc(sizeof(int)); // 0x100
+        int *b = malloc(sizeof(int)); // 0x101
 
-    //     free(b);    // free 0x101 (append front)
-    //     free(a);    // free 0x100 (append front)
+        free(b);    // free 0x101 (append front)
+        free(a);    // free 0x100 (append front)
 
-    //     b = malloc(sizeof(int));    // should have 0x100
-    //     a = malloc(sizeof(int));    // should have 0x101
+        b = malloc(sizeof(int));    // should have 0x100
+        a = malloc(sizeof(int));    // should have 0x101
 
-    //     free(a);
-    //     free(b);
-    // }
+        free(a);
+        free(b);
+    }
     {
         // coalescing testing
         int *a = malloc(sizeof(int));
@@ -57,14 +57,22 @@ int main() {
         show_alloc_mem();
 
         int *d = malloc(sizeof(int));
+        int *e = malloc(1024 * 1024);
 
         show_alloc_mem();
 
         free(c);
-
         free(d);
+        free(e);
 
         show_alloc_mem();
+    }
+    {
+        void *large_alloc = malloc(1024 * 1024);
+
+        show_alloc_mem();
+
+        free(large_alloc);
     }
     return 0;
 }

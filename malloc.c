@@ -46,18 +46,20 @@ static void *_handle_large_alloc(size_t chunk_size) {
         return NULL;
     }
 
-    const size_t size = aligned + mctx.ALIGNED_ZONE_METADATA;
-    zone_metadata_t *allocated_zone = alloc(size);
+    const size_t full_size = aligned + mctx.ALIGNED_ZONE_METADATA;
+    zone_metadata_t *allocated_zone = alloc(full_size);
     if (allocated_zone == MAP_FAILED)
         return NULL;
 
-    allocated_zone->size = size;
+    allocated_zone->size = full_size;
     allocated_zone->type = LARGE;
+    allocated_zone->top = (chunk_header_t*)
+        ((uint8_t*) allocated_zone + full_size);
     _zone_push_back(&mctx.allocator.large_zone, allocated_zone);
 
     chunk_header_t *chunk = (chunk_header_t*)
         ((uint8_t*) allocated_zone + mctx.ALIGNED_ZONE_METADATA);
-    chunk->size = size - mctx.ALIGNED_ZONE_METADATA;
+    chunk->size = full_size - mctx.ALIGNED_ZONE_METADATA;
 
     return (uint8_t*) chunk + mctx.HEADER_SIZE;
 }

@@ -210,7 +210,9 @@ void free(void *ptr) {
         _handle_large_free(&mctx.allocator.large_zone, meta);
     } else {
         _handle_free(meta, zone);
-        if (zone->top != (void*) zone + mctx.ALIGNED_ZONE_METADATA) {
+
+        bool is_empty = zone->top == (void*) zone + mctx.ALIGNED_ZONE_METADATA;
+        if (!is_empty || zone->prev == NULL || zone->next == NULL) {
             pthread_mutex_unlock(&mctx.g_lock);
             return;
         }

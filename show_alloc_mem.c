@@ -58,7 +58,9 @@ static void _show_zones_allocations(zone_metadata_t *head, const char *type) {
 }
 
 void show_alloc_mem() {
+    pthread_mutex_lock(&mctx.g_lock);
     _show_zones_allocations(mctx.allocator.tiny_zone, "TINY");
     _show_zones_allocations(mctx.allocator.small_zone, "SMALL");
     _show_zones_allocations(mctx.allocator.large_zone, "LARGE");
+    pthread_mutex_unlock(&mctx.g_lock);
 }

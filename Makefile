@@ -5,8 +5,8 @@ endif
 LIBNAME = libft_malloc
 LINK = $(LIBNAME).so
 NAME = $(LIBNAME)_$(HOSTTYPE).so
-CFLAGS = -std=gnu11 -Wall -Werror -Wextra -fPIC -g -O0
-# -O3
+CFLAGS = -Wall -Werror -Wextra -fPIC -g -O0
+# -O3 -std=gnu11
 
 SRCS = defines.c utils.c show_alloc_mem.c malloc.c free.c realloc.c calloc.c
 OBJS = $(SRCS:.c=.o)
