@@ -37,7 +37,7 @@ void	*realloc(void *ptr, size_t size) {
 
     // Copy data: use MINIMUM of old and new sizes
     size_t copy_size = (old_user_size < size) ? old_user_size : size;
-    memmove(new_chunk, ptr, copy_size);
+    ft_memmove(new_chunk, ptr, copy_size);
 
     free(ptr);
     return new_chunk;

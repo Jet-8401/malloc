@@ -8,6 +8,7 @@
 # include <pthread.h>
 # include <stdint.h>
 # include <stdbool.h>
+# include "libft/libft.h"
 
 # define TINY_ZONE_TRESHOLD 128
 # define SMALL_ZONE_TRESHOLD 2048

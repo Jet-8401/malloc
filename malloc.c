@@ -161,7 +161,7 @@ static zone_metadata_t *_alloc_zone(enum ZONE_TYPE type) {
         return NULL;
     }
 
-    memset(zone, 0, sizeof(zone_metadata_t));
+    ft_memset(zone, 0, sizeof(zone_metadata_t));
 
     zone->size = size;
     zone->type = type;

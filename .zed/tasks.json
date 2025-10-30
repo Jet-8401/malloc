@@ -1,0 +1,32 @@
+[
+    {
+        "label": "make",
+        "command": "make",
+        "args": [],
+        "cwd": "/home/jullopez/cursus/malloc"
+    },
+    {
+        "label": "make clean",
+        "command": "make",
+        "args": ["clean"],
+        "cwd": "/home/jullopez/cursus/malloc"
+    },
+    {
+        "label": "make re",
+        "command": "make",
+        "args": ["re"],
+        "cwd": "/home/jullopez/cursus/malloc"
+    },
+    {
+        "label": "build test",
+        "command": "gcc",
+        "args": ["-g", "-O0", "-L.", "-lft_malloc", "main.c", "-o", "a.out"],
+        "cwd": "/home/jullopez/cursus/malloc"
+    },
+    {
+        "label": "build and link test",
+        "command": "sh",
+        "args": ["-c", "make && gcc -g -O0 -L. -lft_malloc main.c -o a.out"],
+        "cwd": "/home/jullopez/cursus/malloc"
+    }
+]

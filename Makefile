@@ -11,19 +11,25 @@ CFLAGS = -std=gnu11 -Wall -Werror -Wextra -fPIC -g -O0
 SRCS = defines.c utils.c show_alloc_mem.c malloc.c free.c realloc.c calloc.c
 OBJS = $(SRCS:.c=.o)
 
-all: $(NAME)
+LIBS = libft
+LIBS_NAME = libft/libft.a
+
+all: $(LIBS) $(NAME)
+
+$(LIBS):
+	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 $(NAME): $(OBJS)
-	$(CC) -shared -o $(NAME) $(OBJS)
+	$(CC) -shared -o $(NAME) $(OBJS) $(LIBS_NAME)
 	@ln -sf $(NAME) $(LINK)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-clean:
+clean: $(LIBS)
 	rm -f $(OBJS)
 
-fclean: clean
+fclean: $(LIBS) clean
 	rm -f $(NAME)
 	rm -f $(LINK)
 
@@ -36,4 +42,4 @@ test: $(NAME)
 run_test: test
 	@LD_LIBRARY_PATH=. ./test_malloc --enable-dangerous
 
-.PHONY: all clean fclean re test run_test
+.PHONY: all clean fclean re test run_test $(LIBS)

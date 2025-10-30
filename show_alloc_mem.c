@@ -1,18 +1,12 @@
+#include "libft/libft.h"
 #include "libft_malloc.h"
 #include <unistd.h>
 
 static const char HEXA_BASE[] = "0123456789abcdef";
 static const char DEC_BASE[] = "0123456789";
 
-static size_t _ft_strlen(const char *s) {
-	size_t	i = 0;
-
-	while (*(s + i++));
-	return (i - 1);
-}
-
 static void	_ft_putnbr_base(
-    ssize_t n,
+    const ssize_t n,
     const char *base,
     const ssize_t base_len,
     const char *prefix
@@ -22,9 +16,9 @@ static void	_ft_putnbr_base(
 	if (n >= base_len)
 		_ft_putnbr_base(n / base_len, base, base_len, prefix);
 	else if (prefix)
-        write(1, prefix, _ft_strlen(prefix));
+        ft_putstr_fd(prefix, 1);
 	c = base[n % base_len];
-	write(1, &c, 1);
+	ft_putchar_fd(c, 1);
 }
 
 #define print_hex(n) _ft_putnbr_base(n, HEXA_BASE, 16, "0x");
@@ -40,9 +34,9 @@ static void _show_allocations_in_zone(zone_metadata_t *zone) {
             continue;
 
         print_hex((size_t) it);
-        write(1, " : ", 3);
+        ft_putstr_fd(" : ", 1);
         print_dec(GET_RAW_SIZE(it));
-        write(1, " bytes\n", 7);
+        ft_putendl_fd(" bytes", 1);
     }
 }
 
@@ -50,10 +44,10 @@ static void _show_zones_allocations(zone_metadata_t *head, const char *type) {
     zone_metadata_t *zone_it;
 
     // put the header for the zone
-    write(1, type, _ft_strlen(type));
-    write(1, " : ", 3);
+    ft_putstr_fd(type, 1);
+    ft_putstr_fd(" : ", 1);
     if (head == NULL)
-        write(1, "Nothing allocated...", 20);
+        ft_putstr_fd("Nothing allocated...", 1);
     else
         print_hex((size_t) head);
     write(1, "\n", 1);
