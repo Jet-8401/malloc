@@ -27,6 +27,7 @@ void	*realloc(void *ptr, size_t size) {
     }
 
     const size_t raw_chunk_size = GET_RAW_SIZE(chunk);
+    void *ptr_early_return = NULL;
     size_t remaining_size;
     if (
         new_chunk_size < raw_chunk_size &&
@@ -43,8 +44,14 @@ void	*realloc(void *ptr, size_t size) {
 
         free_list_push_front(&zone->begin, freed_chunk);
 
+        ptr_early_return = ptr;
     } else if (new_chunk_size == raw_chunk_size) {
-        return ptr; // Same chunk size, no need to reallocate
+        ptr_early_return = ptr; // Same chunk size, no need to reallocate
+    }
+
+    if (ptr_early_return) {
+        pthread_mutex_unlock(&mctx.g_lock);
+        return ptr_early_return;
     }
 
     void *new_chunk = malloc(size);
