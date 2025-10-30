@@ -36,7 +36,13 @@ static void _handle_large_free(zone_metadata_t **head, chunk_header_t *chunk) {
 #define COALESCE_BACKWARD (1 << 1)
 #define TOP_CHUNK_ABSORB (1 << 2)
 
-typedef void (*coalesce_strategy)(freed_header_t *chunk, zone_metadata_t *zone);
+// coalesce_strategy is a function that take two arguments, the first one is
+// the chunk being freed and the second the zone that chunk belong to.
+// It should return a chunk to be marked as free, or NULL.
+// A function that return NULL would indicate that the top chunk did
+// absorbed it.
+typedef freed_header_t* (*coalesce_strategy)
+    (freed_header_t *chunk, zone_metadata_t *zone);
 
 static void _free_list_push_front(
     freed_header_t **head, freed_header_t *node
@@ -50,13 +56,19 @@ static void _free_list_push_front(
     *head = node;
 }
 
-static void coalesce_none(freed_header_t *chunk, zone_metadata_t *zone) {
+static freed_header_t* coalesce_none(
+    freed_header_t *chunk, zone_metadata_t *zone
+) {
     WRITE_FOOTER(chunk);
 
     _free_list_push_front(&zone->begin, chunk);
+
+    return chunk;
 }
 
-static void coalesce_forward(freed_header_t *chunk, zone_metadata_t *zone) {
+static freed_header_t* coalesce_forward(
+    freed_header_t *chunk, zone_metadata_t *zone
+) {
     freed_header_t *fw_chunk = ADVANCE_CHUNK((void*) chunk);
 
     remove_from_list(&zone->begin, fw_chunk);
@@ -64,17 +76,25 @@ static void coalesce_forward(freed_header_t *chunk, zone_metadata_t *zone) {
 
     chunk->size += GET_RAW_SIZE(fw_chunk);
     WRITE_FOOTER(chunk);
+
+    return chunk;
 }
 
-static void coalesce_backward(freed_header_t *chunk, zone_metadata_t *zone) {
+static freed_header_t* coalesce_backward(
+    freed_header_t *chunk, zone_metadata_t *zone
+) {
     (void) zone; // not used in function
 
     freed_header_t *bw_chunk = GET_PREV_CHUNK((chunk_header_t*) chunk);
     bw_chunk->size += GET_RAW_SIZE(chunk);
     WRITE_FOOTER(bw_chunk);
+
+    return bw_chunk;
 }
 
-static void coalesce_both(freed_header_t *chunk, zone_metadata_t *zone) {
+static freed_header_t* coalesce_both(
+    freed_header_t *chunk, zone_metadata_t *zone
+) {
     freed_header_t *fw_chunk = ADVANCE_CHUNK((chunk_header_t*) chunk);
     freed_header_t *bw_chunk = GET_PREV_CHUNK((chunk_header_t*) chunk);
 
@@ -82,20 +102,25 @@ static void coalesce_both(freed_header_t *chunk, zone_metadata_t *zone) {
 
     bw_chunk->size += GET_RAW_SIZE(chunk) + GET_RAW_SIZE(fw_chunk);
     WRITE_FOOTER(bw_chunk);
+
+    return bw_chunk;
 }
 
-static void top_chunk_absorb(freed_header_t *chunk, zone_metadata_t *zone) {
+static freed_header_t* top_chunk_absorb(
+    freed_header_t *chunk, zone_metadata_t *zone
+) {
     // store the old size of the top chunk before changing top address
     const size_t old_size = zone->top->size;
 
     // put zone to the begining of the chunk to absorb it
     zone->top = (void*) chunk;
     zone->top->size = old_size + GET_RAW_SIZE(chunk);
+
+    return NULL;
 }
 
-static void coalesce_bw_and_absorb(
-    freed_header_t *chunk,
-    zone_metadata_t *zone
+static freed_header_t* coalesce_bw_and_absorb(
+    freed_header_t *chunk, zone_metadata_t *zone
 ) {
     freed_header_t *bw_chunk = GET_PREV_CHUNK((chunk_header_t*) chunk);
     remove_from_list(&zone->begin, bw_chunk);
@@ -109,11 +134,16 @@ static void coalesce_bw_and_absorb(
     // put zone to the begining of the farthest chunk in memory to absorb it
     zone->top = (void*) bw_chunk;
     zone->top->size = old_size + total_size;
+
+    return NULL;
 }
 
-static void null_function(freed_header_t* chunk, zone_metadata_t* zone) {
+static freed_header_t* null_function(
+    freed_header_t* chunk, zone_metadata_t* zone
+) {
     (void) chunk;
     (void) zone;
+    return NULL;
 }
 
 // COALESCE_NONE = adding free chunk to list
@@ -153,13 +183,14 @@ static void _handle_free(chunk_header_t *chunk, zone_metadata_t *zone) {
         actions |= COALESCE_BACKWARD;
     }
 
-    MARK_FREE(chunk);
     freed_header_t *freed_chunk = (void*) chunk;
     // make sure to erase the metadata
     freed_chunk->next = NULL;
     freed_chunk->prev = NULL;
 
-    strategies[actions](freed_chunk, zone);
+    freed_header_t *returned_chunk = strategies[actions](freed_chunk, zone);
+    if (returned_chunk)
+        MARK_FREE((chunk_header_t*) returned_chunk);
 }
 
 void free(void *ptr) {

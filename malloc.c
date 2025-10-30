@@ -89,14 +89,16 @@ static void *_search_free_list(zone_metadata_t *zone, size_t chunk_size) {
             // else the allocated chunk is taken after the freed memory so
             // we only need to update the freed chunk size
             // note: important to update the state of chunks such as recreating
-            // the footer of the freed chunk and set the IS_PREV_FREE flag of
-            // the newly allocated chunk
+            // the footer of the freed chunk and do MARK_FREE on chunk_it
+            // to set the flags appropriately
             chunk_it->size = remaining_size;
             WRITE_FOOTER(chunk_it);
 
             // setup values of allocated chunk in memory
             allocated_chunk = ADVANCE_CHUNK((chunk_header_t*) chunk_it);
-            allocated_chunk->size = chunk_size | IS_PREV_FREE;
+            allocated_chunk->size = chunk_size;
+
+            MARK_FREE((chunk_header_t*) chunk_it);
         }
 
         MARK_ALLOCATED(allocated_chunk);

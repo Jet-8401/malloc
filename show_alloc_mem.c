@@ -41,8 +41,7 @@ static void _show_allocations_in_zone(zone_metadata_t *zone) {
 
         print_hex((size_t) it);
         write(1, " : ", 3);
-        // print_dec(GET_RAW_SIZE(it));
-        print_dec(it->size);
+        print_dec(GET_RAW_SIZE(it));
         write(1, " bytes\n", 7);
     }
 }

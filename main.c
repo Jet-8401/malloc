@@ -39,20 +39,32 @@ int main() {
     {
         // coalescing testing
         int *a = malloc(sizeof(int));
+
+        show_alloc_mem();
+
         int *b = malloc(sizeof(int));
         int *c = malloc(sizeof(int));
+
+        *a = 50;
+        *b = 50933;
+        *c = -1;
 
         show_alloc_mem();
 
         free(a);
         free(b);
 
+        show_alloc_mem();
+
         int *d = malloc(sizeof(int));
+
+        show_alloc_mem();
 
         free(c);
 
         free(d);
 
+        show_alloc_mem();
     }
     return 0;
 }
