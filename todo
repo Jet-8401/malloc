@@ -1,5 +1,5 @@
 done: ✅, undone: ❎
 improve multi-threading performance ❎
-implement show_alloc_mem() ❎
+implement show_alloc_mem() ✅
 improve realloc implementation about shrikings ❎
-improve free unmap strategy ❎
+improve free unmap strategy ✅
