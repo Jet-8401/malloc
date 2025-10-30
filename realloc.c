@@ -21,13 +21,29 @@ void	*realloc(void *ptr, size_t size) {
     pthread_mutex_unlock(&mctx.g_lock);
 
     size_t old_user_size = GET_RAW_SIZE(chunk) - mctx.HEADER_SIZE;
-
     size_t new_chunk_size;
     if (compute_chunk_size(size, &new_chunk_size) == -1) {
         return NULL;
     }
 
-    if (new_chunk_size == GET_RAW_SIZE(chunk)) {
+    const size_t raw_chunk_size = GET_RAW_SIZE(chunk);
+    size_t remaining_size;
+    if (
+        new_chunk_size < raw_chunk_size &&
+        (remaining_size = raw_chunk_size - new_chunk_size) > mctx.MIN_CHUNK_SIZE
+    ) {
+        // update the chunk size and create a new freed chunk after it
+        chunk->size = new_chunk_size;
+
+        // create a free chunk
+        freed_header_t *freed_chunk = ADVANCE_CHUNK(chunk);
+        freed_chunk->size = remaining_size;
+        MARK_FREE((void*) freed_chunk);
+        WRITE_FOOTER(freed_chunk);
+
+        free_list_push_front(&zone->begin, freed_chunk);
+
+    } else if (new_chunk_size == raw_chunk_size) {
         return ptr; // Same chunk size, no need to reallocate
     }
 

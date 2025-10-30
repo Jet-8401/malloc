@@ -44,24 +44,12 @@ static void _handle_large_free(zone_metadata_t **head, chunk_header_t *chunk) {
 typedef freed_header_t* (*coalesce_strategy)
     (freed_header_t *chunk, zone_metadata_t *zone);
 
-static void _free_list_push_front(
-    freed_header_t **head, freed_header_t *node
-) {
-    node->next = *head;
-    node->prev = NULL;
-
-    if (*head) {
-        (*head)->prev = node;
-    }
-    *head = node;
-}
-
 static freed_header_t* coalesce_none(
     freed_header_t *chunk, zone_metadata_t *zone
 ) {
     WRITE_FOOTER(chunk);
 
-    _free_list_push_front(&zone->begin, chunk);
+    free_list_push_front(&zone->begin, chunk);
 
     return chunk;
 }
@@ -72,7 +60,7 @@ static freed_header_t* coalesce_forward(
     freed_header_t *fw_chunk = ADVANCE_CHUNK((void*) chunk);
 
     remove_from_list(&zone->begin, fw_chunk);
-    _free_list_push_front(&zone->begin, chunk);
+    free_list_push_front(&zone->begin, chunk);
 
     chunk->size += GET_RAW_SIZE(fw_chunk);
     WRITE_FOOTER(chunk);

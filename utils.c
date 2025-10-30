@@ -80,3 +80,15 @@ int compute_chunk_size(size_t user_size, size_t *chunk_size) {
     *chunk_size = chunk;
     return 0;
 }
+
+void free_list_push_front(
+    freed_header_t **head, freed_header_t *node
+) {
+    node->next = *head;
+    node->prev = NULL;
+
+    if (*head) {
+        (*head)->prev = node;
+    }
+    *head = node;
+}

@@ -108,8 +108,11 @@ extern mctx_t mctx;
 /* utils function */
 
 void remove_from_list(freed_header_t **head, freed_header_t *node);
-bool search_pointer_in_heap(void *ptr, zone_metadata_t **zone, chunk_header_t **chunk);
+bool search_pointer_in_heap(
+    void *ptr, zone_metadata_t **zone, chunk_header_t **chunk
+);
 int compute_chunk_size(size_t user_size, size_t *chunk_size);
+void free_list_push_front(freed_header_t **head, freed_header_t *node);
 
 static inline void *ADVANCE_CHUNK(chunk_header_t *chunk) {
     return ((uint8_t*) chunk + GET_RAW_SIZE(chunk));
