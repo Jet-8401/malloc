@@ -36,13 +36,22 @@ void	*realloc(void *ptr, size_t size) {
         // update the chunk size and create a new freed chunk after it
         chunk->size = new_chunk_size;
 
-        // create a free chunk
-        freed_header_t *freed_chunk = ADVANCE_CHUNK(chunk);
-        freed_chunk->size = remaining_size;
-        MARK_FREE((void*) freed_chunk);
-        WRITE_FOOTER(freed_chunk);
+        // check if the top chunk should absorb instead of splitting
+        if ((uint8_t*) chunk + raw_chunk_size == (uint8_t*) zone->top) {
+            // make the top chunk absorb the rest of the memory
+            const size_t old_size = zone->top->size;
 
-        free_list_push_front(&zone->begin, freed_chunk);
+            zone->top = (chunk_header_t*) ((uint8_t*) chunk + new_chunk_size);
+            zone->top->size = old_size + remaining_size;
+        } else {
+            // create a free chunk
+            freed_header_t *freed_chunk = ADVANCE_CHUNK(chunk);
+            freed_chunk->size = remaining_size;
+            MARK_FREE((void*) freed_chunk);
+            WRITE_FOOTER(freed_chunk);
+
+            free_list_push_front(&zone->begin, freed_chunk);
+        }
 
         ptr_early_return = ptr;
     } else if (new_chunk_size == raw_chunk_size) {

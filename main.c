@@ -74,25 +74,34 @@ int main() {
 
     //     free(large_alloc);
     // }
+    // {
+    //     int *a = malloc(96);
+
+    //     show_alloc_mem();
+
+    //     int *b = malloc(sizeof(int));
+    //     *b = 303949339;
+
+    //     a = realloc(a, 32); // 64 bytes freed block
+
+    //     show_alloc_mem();
+
+    //     int *c = malloc(32);
+
+    //     show_alloc_mem();
+
+    //     free(a);
+    //     free(b);
+    //     free(c);
+    // }
     {
-        int *a = malloc(96);
+        int *large_alloc = malloc(96);
 
-        show_alloc_mem();
+        large_alloc = realloc(large_alloc, 32);
 
-        int *b = malloc(sizeof(int));
-        *b = 303949339;
-
-        a = realloc(a, 32); // 64 bytes freed block
-
-        show_alloc_mem();
-
-        int *c = malloc(32);
-
-        show_alloc_mem();
-
-        free(a);
-        free(b);
-        free(c);
+        free(large_alloc);
     }
     return 0;
 }
+
+// expr *mctx.allocator.tiny_zone
